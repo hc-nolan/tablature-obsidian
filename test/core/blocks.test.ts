@@ -123,7 +123,7 @@ describe('planInsertStaff', () => {
 	it('places a new block after a closed non-tab block without changing it', () => {
 		const result = applyPlan(['```python', 'x', '```', 'after'], 1);
 		expect(result.lines.slice(0, 3)).toEqual(['```python', 'x', '```']);
-		expect(result.lines.at(-1)).toBe('after');
+		expect(result.lines[result.lines.length - 1]).toBe('after');
 		expect(findStaves(result.lines)).toEqual([{ top: result.top, height: 2 }]);
 	});
 

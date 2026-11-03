@@ -73,11 +73,8 @@ export function nextStaff(lines: string[], top: number): StaffRange | null {
 }
 
 export function prevStaff(lines: string[], top: number): StaffRange | null {
-	return (
-		findStaves(lines)
-			.filter((staff) => staff.top < top)
-			.at(-1) ?? null
-	);
+	const above = findStaves(lines).filter((staff) => staff.top < top);
+	return above[above.length - 1] ?? null;
 }
 
 export function planInsertStaff(
