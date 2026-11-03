@@ -1,7 +1,7 @@
 import { EditorSelection } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/core/config';
-import { applyAction, applyBeats, applyTuning, enterAt, insertStaff } from '../../src/editor/actions';
+import { type Action, applyAction, applyBeats, applyTuning, enterAt, enterChord, insertStaff } from '../../src/editor/actions';
 import { currentStaff, modeField } from '../../src/editor/mode';
 import { applyResult, cursor, digits, DOC, lines, makeState, run, runUndo, STAFF, tabState } from './helpers';
 
@@ -239,5 +239,127 @@ describe('insertStaff', () => {
 		const result = insertStaff(state, DEFAULT_CONFIG);
 		expect(result.notice).toMatch(/close/i);
 		expect(result.spec).toBeUndefined();
+	});
+});
+
+describe('chord mode', () => {
+	const config = {
+		...DEFAULT_CONFIG,
+		chords: {
+			default: {
+				Alpha: ['0', '2'],
+				Beta: ['12', '0'],
+				Gamma: ['x', '3'],
+			},
+		},
+	};
+	const chordState = (name = 'Alpha') => {
+		const start = tabState(DOC, 1, 5);
+		return applyResult(start, enterChord(start, name, config));
+	};
+	const chord = (state: ReturnType<typeof chordState>) => {
+		const mode = state.field(modeField);
+		return mode.kind === 'off' ? null : mode.chord;
+	};
+	const runC = (state: ReturnType<typeof chordState>, type: Action['type']) => run(state, type, config);
+
+	it('gives a notice from pickShape when nothing fits, staying in tab mode', () => {
+		const start = tabState(DOC, 1, 5);
+		const result = applyAction(start, { type: 'pickShape' }, DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/shape/i);
+		expect(result.request).toBeUndefined();
+		expect(applyResult(start, result).field(modeField).kind).toBe('tab');
+	});
+
+	it('requests shape names in sorted order', () => {
+		const { request } = applyAction(tabState(DOC, 1, 5), { type: 'pickShape' }, config);
+		expect(request).toEqual({ kind: 'shape', names: ['Alpha', 'Beta', 'Gamma'] });
+	});
+
+	it('enters on the named shape at root 0', () => {
+		const state = chordState('Beta');
+		expect(state.field(modeField).kind).toBe('chord');
+		expect(chord(state)).toMatchObject({ index: 1, root: 0, names: ['Alpha', 'Beta', 'Gamma'] });
+	});
+
+	it('wraps through shapes in both directions', () => {
+		expect(chord(runC(chordState('Gamma'), 'nextShape'))?.index).toBe(0);
+		expect(chord(runC(chordState('Alpha'), 'prevShape'))?.index).toBe(2);
+	});
+
+	it('keeps the root at 0 or above', () => {
+		expect(chord(runC(chordState(), 'rootDown'))?.root).toBe(0);
+	});
+
+	it('caps the root so no fret exceeds 99', () => {
+		let state = chordState('Beta');
+		for (let i = 0; i < 100; i++) state = runC(state, 'rootUp');
+		expect(chord(state)?.root).toBe(87);
+	});
+
+	it('clamps the root when moving to a shape with a lower cap', () => {
+		let state = chordState('Alpha');
+		for (let i = 0; i < 100; i++) state = runC(state, 'rootUp');
+		expect(chord(state)?.root).toBe(97);
+		expect(chord(runC(state, 'nextShape'))?.root).toBe(87);
+	});
+
+	it('writes the voicing at the root and stays in chord mode', () => {
+		const state = runC(runC(chordState(), 'rootUp'), 'writeChord');
+		expect(lines(state).slice(1, 3)).toEqual(['e|---3--|------|', 'B|---1--|------|']);
+		expect(state.field(modeField).kind).toBe('chord');
+		expect(cursor(state)).toEqual({ row: 1, col: 5 });
+	});
+
+	it('writes x for a muted string', () => {
+		const state = runC(chordState('Gamma'), 'writeChord');
+		expect(lines(state).slice(1, 3)).toEqual(['e|---3--|------|', 'B|---x--|------|']);
+	});
+
+	it('undoes a whole chord in one step', () => {
+		expect(lines(runUndo(runC(chordState(), 'writeChord')))).toEqual(DOC);
+	});
+
+	it('returns to tab mode on exit', () => {
+		const state = runC(chordState(), 'exit');
+		expect(state.field(modeField).kind).toBe('tab');
+		expect(chord(state)).toBeNull();
+	});
+
+	it('moves between strings and stays in chord mode', () => {
+		const state = runC(chordState(), 'nextString');
+		expect(cursor(state)).toEqual({ row: 2, col: 5 });
+		expect(state.field(modeField).kind).toBe('chord');
+	});
+
+	describe('moving to another staff', () => {
+		const three = ['e|---|', 'B|---|', 'G|---|'];
+
+		it('falls back to tab mode with a notice when no shape fits', () => {
+			const doc = ['```tab', ...STAFF, '', ...three, '```'];
+			const start = tabState(doc, 2, 5);
+			const entered = applyResult(start, enterChord(start, 'Alpha', config));
+			const result = applyAction(entered, { type: 'nextString' }, config);
+			expect(result.notice).toMatch(/shape/i);
+			const state = applyResult(entered, result);
+			expect(state.field(modeField).kind).toBe('tab');
+			expect(cursor(state).row).toBe(4);
+		});
+
+		it('re-resolves shapes for the new staff, keeping the name if it exists', () => {
+			const doc = ['```tab', ...STAFF, '', 'e|---|', 'E|---|', '```'];
+			const tuned = {
+				...config,
+				tunings: [{ name: 'Low', strings: ['E', 'e'] }],
+				chords: { ...config.chords, Low: { Delta: ['1', '1'] } },
+			};
+			const start = tabState(doc, 2, 5);
+			const entered = applyResult(start, enterChord(start, 'Beta', tuned));
+			const state = run(entered, 'nextString', tuned);
+			expect(state.field(modeField).kind).toBe('chord');
+			const next = chord(state);
+			expect(next?.names).toEqual(['Alpha', 'Beta', 'Delta', 'Gamma']);
+			expect(next?.names[next.index]).toBe('Beta');
+		});
 	});
 });

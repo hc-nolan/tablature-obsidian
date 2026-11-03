@@ -3,8 +3,8 @@
 import { isolateHistory } from '@codemirror/commands';
 import { EditorSelection, type EditorState, type TransactionSpec } from '@codemirror/state';
 import { nextStaff, planInsertStaff, prevStaff, type StaffRange } from '../core/blocks';
-import { matchTuning } from '../core/chords';
-import type { Config, Tuning } from '../core/config';
+import { applyRoot, availableShapes, matchTuning, maxRoot, writeVoicing } from '../core/chords';
+import type { Config, Shape, Tuning } from '../core/config';
 import {
 	clampPos,
 	clearCell,
@@ -19,7 +19,16 @@ import {
 	staffLabelsLowToHigh,
 	writeFret,
 } from '../core/staff';
-import { type ActiveMode, currentStaff, modeField, OFF, parseStaffAtRow, setMode, toChanges } from './mode';
+import {
+	type ActiveMode,
+	type ChordState,
+	currentStaff,
+	modeField,
+	OFF,
+	parseStaffAtRow,
+	setMode,
+	toChanges,
+} from './mode';
 
 export type Action =
 	| {
@@ -108,17 +117,52 @@ function posRight(staff: Staff, pos: Pos): Pos {
 	return pos.measure + 1 < staff.measures.length ? { measure: pos.measure + 1, beat: 0 } : pos;
 }
 
+function clampRoot(chord: ChordState): ChordState {
+	const shape = chord.shapes[chord.names[chord.index] as string] as Shape;
+	return { ...chord, root: Math.max(0, Math.min(maxRoot(shape), chord.root)) };
+}
+
 function switchStaff(
 	state: EditorState,
 	mode: ActiveMode,
 	range: StaffRange,
 	stringRow: number,
 	pos: Pos,
+	config: Config,
 ): ActionResult {
 	const parsed = parseStaff(state.doc.toJSON().slice(range.top, range.top + range.height), range.top);
 	if (!parsed.ok) return { notice: parsed.problem };
 	const staffFrom = state.doc.line(range.top + 1).from;
-	return moveTo(state, { ...mode, staffFrom }, parsed.staff, stringRow, clampPos(parsed.staff, pos));
+	const target = clampPos(parsed.staff, pos);
+	if (!mode.chord) return moveTo(state, { ...mode, staffFrom }, parsed.staff, stringRow, target);
+
+	const shapes = availableShapes(parsed.staff, config);
+	const names = Object.keys(shapes).sort();
+	if (names.length === 0) {
+		const tab: ActiveMode = { ...mode, kind: 'tab', chord: null, staffFrom };
+		return {
+			...moveTo(state, tab, parsed.staff, stringRow, target),
+			notice: `No chord shapes fit this staff, so chord mode has ended.`,
+		};
+	}
+	const index = Math.max(0, names.indexOf(mode.chord.names[mode.chord.index] as string));
+	const chord = clampRoot({ names, shapes, index, root: mode.chord.root });
+	return moveTo(state, { ...mode, chord, staffFrom }, parsed.staff, stringRow, target);
+}
+
+function setChord(mode: ActiveMode, chord: ChordState): ActionResult {
+	return { spec: { effects: setMode.of({ ...mode, chord: clampRoot(chord) }) } };
+}
+
+export function enterChord(state: EditorState, shapeName: string, config: Config): ActionResult {
+	const mode = state.field(modeField);
+	const info = currentStaff(state);
+	if (mode.kind === 'off' || !info) return {};
+	const shapes = availableShapes(info.staff, config);
+	const names = Object.keys(shapes).sort();
+	const index = names.indexOf(shapeName);
+	if (index < 0) return { notice: `The shape "${shapeName}" doesn't fit this staff.` };
+	return { spec: { effects: setMode.of({ ...mode, kind: 'chord', pending: false, chord: { names, shapes, index, root: 0 } }) } };
 }
 
 export function enterAt(state: EditorState, _config: Config): ActionResult {
@@ -205,12 +249,14 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 		case 'nextString': {
 			if (row + 1 < staff.rows.length) return moveTo(state, mode, staff, row + 1, pos);
 			const next = nextStaff(lines(), staff.top);
-			return next ? switchStaff(state, mode, next, 0, pos) : moveTo(state, mode, staff, row, pos);
+			return next ? switchStaff(state, mode, next, 0, pos, config) : moveTo(state, mode, staff, row, pos);
 		}
 		case 'prevString': {
 			if (row > 0) return moveTo(state, mode, staff, row - 1, pos);
 			const prev = prevStaff(lines(), staff.top);
-			return prev ? switchStaff(state, mode, prev, prev.height - 1, pos) : moveTo(state, mode, staff, row, pos);
+			return prev
+				? switchStaff(state, mode, prev, prev.height - 1, pos, config)
+				: moveTo(state, mode, staff, row, pos);
 		}
 		case 'digit': {
 			const { edit, pending } = writeFret(staff, row, pos, action.digit, mode.pending);
@@ -229,9 +275,31 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 			return {
 				request: { kind: 'beats', measure: pos.measure, current: (staff.measures[pos.measure] as Measure).beats },
 			};
+		case 'pickShape': {
+			const names = Object.keys(availableShapes(staff, config)).sort();
+			if (names.length === 0) return { notice: 'No chord shapes fit this staff.' };
+			return { request: { kind: 'shape', names } };
+		}
+		case 'nextShape':
+		case 'prevShape': {
+			if (!mode.chord) return {};
+			const count = mode.chord.names.length;
+			const step = action.type === 'nextShape' ? 1 : count - 1;
+			return setChord(mode, { ...mode.chord, index: (mode.chord.index + step) % count });
+		}
+		case 'rootUp':
+			return mode.chord ? setChord(mode, { ...mode.chord, root: mode.chord.root + 1 }) : {};
+		case 'rootDown':
+			return mode.chord ? setChord(mode, { ...mode.chord, root: mode.chord.root - 1 }) : {};
+		case 'writeChord': {
+			if (!mode.chord) return {};
+			const shape = mode.chord.shapes[mode.chord.names[mode.chord.index] as string] as Shape;
+			const edits = writeVoicing(staff, pos, applyRoot(shape, mode.chord.root));
+			return editSpec(state, mode, staff, edits, row, pos, false);
+		}
 		case 'exit':
-			return { spec: { effects: setMode.of(OFF) } };
-		default:
-			return {};
+			return {
+				spec: { effects: setMode.of(mode.kind === 'chord' ? { ...mode, kind: 'tab', chord: null } : OFF) },
+			};
 	}
 }
