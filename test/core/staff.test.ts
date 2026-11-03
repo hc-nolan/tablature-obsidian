@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { clampPos, colToPos, isStaffLine, parseStaff, posToCol, type Staff } from '../../src/core/staff';
+import {
+	clampPos,
+	clearCell,
+	colToPos,
+	generateStaff,
+	isStaffLine,
+	type LineEdit,
+	parseBeatCount,
+	parseStaff,
+	posToCol,
+	relabel,
+	setMeasureBeats,
+	type Staff,
+	staffLabelsLowToHigh,
+	writeFret,
+} from '../../src/core/staff';
 
 function parsed(rows: string[], top = 0): Staff {
 	const result = parseStaff(rows, top);
@@ -118,5 +133,157 @@ describe('clampPos', () => {
 		expect(clampPos(staff, { measure: 5, beat: 3 })).toEqual({ measure: 1, beat: 0 });
 		expect(clampPos(staff, { measure: 0, beat: 9 })).toEqual({ measure: 0, beat: 1 });
 		expect(clampPos(staff, { measure: -1, beat: -1 })).toEqual({ measure: 0, beat: 0 });
+	});
+});
+
+function apply(rows: string[], edits: LineEdit[], top = 0): string[] {
+	const out = [...rows];
+	for (const edit of edits) {
+		const i = edit.row - top;
+		const row = out[i] as string;
+		out[i] = row.slice(0, edit.from) + edit.insert + row.slice(edit.to);
+	}
+	return out;
+}
+
+describe('writeFret', () => {
+	const pos = { measure: 0, beat: 0 };
+	const on = (row: string) => parsed([row, 'B|---------|']);
+
+	it('writes a single digit and sets pending', () => {
+		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, '5', false);
+		expect(apply(['e|---------|'], [edit])[0]).toBe('e|5--------|');
+		expect(pending).toBe(true);
+	});
+
+	it('makes a double-digit fret when pending and clears pending', () => {
+		const { edit, pending } = writeFret(on('e|5--------|'), 0, pos, '2', true);
+		expect(apply(['e|5--------|'], [edit])[0]).toBe('e|52-------|');
+		expect(pending).toBe(false);
+	});
+
+	it('overwrites a double-digit fret when not pending', () => {
+		const { edit, pending } = writeFret(on('e|52-------|'), 0, pos, '3', false);
+		expect(apply(['e|52-------|'], [edit])[0]).toBe('e|3--------|');
+		expect(pending).toBe(true);
+	});
+
+	it('treats pending on a non-digit cell as a fresh write', () => {
+		const { edit, pending } = writeFret(on('e|-x-------|'), 0, pos, '7', true);
+		expect(apply(['e|-x-------|'], [edit])[0]).toBe('e|7--------|');
+		expect(pending).toBe(true);
+	});
+
+	it('targets the given string and beat, offset by the staff top', () => {
+		const staff = parsed(['e|---------|', 'B|---------|'], 20);
+		const { edit } = writeFret(staff, 1, { measure: 0, beat: 1 }, '9', false);
+		expect(edit.row).toBe(21);
+		expect(apply(staff.rows, [edit], 20)).toEqual(['e|---------|', 'B|---9-----|']);
+	});
+});
+
+describe('clearCell', () => {
+	const pos = { measure: 0, beat: 0 };
+
+	it('clears both digits of a double-digit fret', () => {
+		const rows = ['e|12-------|', 'B|---------|'];
+		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|---------|');
+	});
+
+	it('keeps the third character of the cell', () => {
+		const rows = ['e|12h------|', 'B|---------|'];
+		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|--h------|');
+	});
+});
+
+describe('setMeasureBeats', () => {
+	it('grows a measure on every row, preserving notes', () => {
+		const rows = ['e|5--|2--|', 'B|---|---|'];
+		expect(apply(rows, setMeasureBeats(parsed(rows), 0, 2))).toEqual(['e|5-----|2--|', 'B|------|---|']);
+	});
+
+	it('shrinks a measure by dropping trailing beats, even with content', () => {
+		const rows = ['e|5--2--|', 'B|------|'];
+		expect(apply(rows, setMeasureBeats(parsed(rows), 0, 1))).toEqual(['e|5--|', 'B|---|']);
+	});
+
+	it('changes only the target measure', () => {
+		const rows = ['e|---|5--|', 'B|---|---|'];
+		const result = parseStaff(apply(rows, setMeasureBeats(parsed(rows), 1, 3)), 0);
+		expect(result.ok && result.staff.measures.map((m) => m.beats)).toEqual([1, 3]);
+	});
+
+	it('produces no edits when the count is unchanged', () => {
+		const rows = ['e|---|', 'B|---|'];
+		expect(setMeasureBeats(parsed(rows), 0, 1)).toEqual([]);
+	});
+});
+
+describe('relabel', () => {
+	const BLANK = '|---------------|';
+	const standard = ['e', 'B', 'G', 'D', 'A', 'E'].map((l) => l + BLANK);
+
+	it('changes only the labels that differ', () => {
+		const out = apply(standard, relabel(parsed(standard), ['D', 'A', 'D', 'G', 'B', 'e']));
+		expect(out[0]).toBe(`e${BLANK}`);
+		expect(out[5]).toBe(`D${BLANK}`);
+	});
+
+	it('preserves cell content', () => {
+		const rows = ['e|5--------------|', ...standard.slice(1)];
+		const out = apply(rows, relabel(parsed(rows), ['D', 'A', 'D', 'G', 'B', 'e']));
+		expect(out[0]).toBe('e|5--------------|');
+	});
+
+	it('pads all labels to the new maximum width', () => {
+		const rows = ['e|---|', 'E|---|'];
+		expect(apply(rows, relabel(parsed(rows), ['C#', 'e']))).toEqual(['e |---|', 'C#|---|']);
+	});
+
+	it('narrows padding when the new labels are shorter', () => {
+		const rows = ['e |---|', 'C#|---|'];
+		expect(apply(rows, relabel(parsed(rows), ['E', 'e']))).toEqual(['e|---|', 'E|---|']);
+	});
+});
+
+describe('generateStaff', () => {
+	it('lists rows high to low', () => {
+		expect(generateStaff(['E', 'e'], 2, 1)).toEqual(['e|---|---|', 'E|---|---|']);
+	});
+
+	it('pads labels so bars line up', () => {
+		expect(generateStaff(['Eb', 'e'], 1, 1)).toEqual(['e |---|', 'Eb|---|']);
+	});
+
+	it('matches the Neovim default length of 106 characters', () => {
+		const lines = generateStaff(['E', 'A', 'D', 'G', 'B', 'e'], 8, 4);
+		expect(lines).toHaveLength(6);
+		for (const line of lines) expect(line).toHaveLength(106);
+	});
+
+	it('produces a staff that parses', () => {
+		expect(parseStaff(generateStaff(['E', 'A'], 3, 2), 0).ok).toBe(true);
+	});
+});
+
+describe('staffLabelsLowToHigh', () => {
+	it('reverses the top-to-bottom labels', () => {
+		expect(staffLabelsLowToHigh(parsed(['e |---|', 'Eb|---|']))).toEqual(['Eb', 'e']);
+	});
+});
+
+describe('parseBeatCount', () => {
+	it.each([
+		['4', 4],
+		[' 16 ', 16],
+		['128', 128],
+		['0', null],
+		['2.5', null],
+		['abc', null],
+		['', null],
+		['-3', null],
+		['129', null],
+	])('%j → %s', (text, expected) => {
+		expect(parseBeatCount(text)).toBe(expected);
 	});
 });
