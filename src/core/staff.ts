@@ -100,7 +100,7 @@ const MAX_BEATS = 128;
 const FILLER = '-';
 const CONTENT_WIDTH = 2;
 
-function cellEdit(staff: Staff, stringRow: number, pos: Pos, content: string): LineEdit {
+export function cellEdit(staff: Staff, stringRow: number, pos: Pos, content: string): LineEdit {
 	const from = posToCol(staff, pos);
 	return { row: staff.top + stringRow, from, to: from + CONTENT_WIDTH, insert: content.padEnd(CONTENT_WIDTH, FILLER) };
 }
