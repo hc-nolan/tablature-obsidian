@@ -71,9 +71,12 @@ export const DEFAULT_CONFIG: Config = {
 const LABEL = /^[^\s|]{1,4}$/;
 const FRET = /^(x|\d{1,2})$/;
 const MIN_STRINGS = 2;
+const RESERVED_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
+const RESERVED_PROBLEM = 'That name is reserved. Choose another.';
 
 function isValidTuning(name: string, strings: string[]): string | null {
 	if (!name) return 'The tuning needs a name.';
+	if (RESERVED_NAMES.has(name)) return RESERVED_PROBLEM;
 	if (strings.length < MIN_STRINGS) return 'A tuning needs at least 2 strings.';
 	const bad = strings.find((label) => !LABEL.test(label));
 	return bad === undefined ? null : `"${bad}" isn't a usable label: labels are 1 to 4 characters.`;
@@ -111,6 +114,9 @@ export function parseChords(text: string): Parsed<ChordLibrary> {
 		const parts = fields(line);
 		if (parts.length !== 3 || !parts[0] || !parts[1]) {
 			return { ok: false, line: i + 1, problem: 'Use the format: default or tuning name | shape name | 0 2 2 x x x' };
+		}
+		if (RESERVED_NAMES.has(parts[0]) || RESERVED_NAMES.has(parts[1])) {
+			return { ok: false, line: i + 1, problem: RESERVED_PROBLEM };
 		}
 		const values = words(parts[2] as string);
 		const problem = isValidShape(values);
@@ -163,9 +169,12 @@ function validTunings(value: unknown): Tuning[] | null {
 function validChords(value: unknown): ChordLibrary | null {
 	const library = asRecord(value);
 	if (!library) return null;
-	const ok = Object.values(library).every((group) => {
+	const ok = Object.entries(library).every(([scope, group]) => {
 		const shapes = asRecord(group);
-		return !!shapes && Object.values(shapes).every((s) => isStringArray(s) && !isValidShape(s));
+		if (RESERVED_NAMES.has(scope) || !shapes) return false;
+		return Object.entries(shapes).every(
+			([name, s]) => !RESERVED_NAMES.has(name) && isStringArray(s) && !isValidShape(s),
+		);
 	});
 	return ok ? (library as ChordLibrary) : null;
 }

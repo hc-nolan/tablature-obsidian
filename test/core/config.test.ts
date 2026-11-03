@@ -124,3 +124,28 @@ describe('mergeConfig', () => {
 		expect(mergeConfig({ chords: { default: { Bad: ['z'] } } }).chords).toEqual(DEFAULT_CONFIG.chords);
 	});
 });
+
+describe('reserved names', () => {
+	const reserved = ['__proto__', 'constructor', 'prototype'];
+
+	it.each(reserved)('rejects %s as a chord scope without polluting Object.prototype', (name) => {
+		const result = parseChords(`${name} | polluted | 0 2`);
+		expect(result).toMatchObject({ ok: false, line: 1 });
+		expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+	});
+
+	it.each(reserved)('rejects %s as a shape name', (name) => {
+		expect(parseChords(`default | ${name} | 0 2`)).toMatchObject({ ok: false, line: 1 });
+	});
+
+	it.each(reserved)('rejects %s as a tuning name', (name) => {
+		expect(parseTunings(`${name} | E e`)).toMatchObject({ ok: false, line: 1 });
+	});
+
+	it('falls back to defaults for saved data using a reserved name', () => {
+		const saved = JSON.parse('{"chords":{"__proto__":{"x":["0"]}},"tunings":[{"name":"constructor","strings":["E","e"]}]}') as unknown;
+		const config = mergeConfig(saved);
+		expect(config.chords).toEqual(DEFAULT_CONFIG.chords);
+		expect(config.tunings).toEqual(DEFAULT_CONFIG.tunings);
+	});
+});
