@@ -1,2 +1,15 @@
-.tablature-spike-widget { color: var(--text-accent); font-family: var(--font-monospace); }
-.tablature-spike-mark { background: var(--text-selection); }
+.tablature-measure {
+	background-color: var(--text-selection);
+}
+
+.tablature-indicator,
+.tablature-legend {
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-smaller);
+}
+
+.tablature-preview {
+	color: var(--text-accent);
+	font-weight: var(--font-bold);
+}
