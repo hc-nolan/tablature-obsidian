@@ -25,7 +25,7 @@ const shape = (text: string): Shape => text.split(' ');
 
 export const DEFAULT_CONFIG: Config = {
 	beats: 4,
-	measures: 8,
+	measures: 4,
 	tunings: [
 		{ name: 'Standard', strings: ['E', 'A', 'D', 'G', 'B', 'e'] },
 		{ name: 'Drop D', strings: ['D', 'A', 'D', 'G', 'B', 'e'] },

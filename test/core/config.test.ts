@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { generateStaff } from '../../src/core/staff';
 import {
 	DEFAULT_CONFIG,
 	formatChords,
@@ -9,9 +10,9 @@ import {
 } from '../../src/core/config';
 
 describe('DEFAULT_CONFIG', () => {
-	it('matches the Neovim defaults', () => {
+	it('has the expected defaults', () => {
 		expect(DEFAULT_CONFIG.beats).toBe(4);
-		expect(DEFAULT_CONFIG.measures).toBe(8);
+		expect(DEFAULT_CONFIG.measures).toBe(4);
 		expect(DEFAULT_CONFIG.tunings.map((t) => t.name)).toEqual(['Standard', 'Drop D']);
 		expect(DEFAULT_CONFIG.tunings[0]?.strings).toEqual(['E', 'A', 'D', 'G', 'B', 'e']);
 		expect(DEFAULT_CONFIG.chords['default']?.['Power 5th (E root)']).toEqual(['0', '2', '2', 'x', 'x', 'x']);
@@ -117,7 +118,7 @@ describe('mergeConfig', () => {
 
 	it('falls back per field when malformed', () => {
 		expect(mergeConfig({ beats: 'lots' }).beats).toBe(4);
-		expect(mergeConfig({ measures: 0 }).measures).toBe(8);
+		expect(mergeConfig({ measures: 0 }).measures).toBe(4);
 		expect(mergeConfig({ tunings: [] }).tunings).toEqual(DEFAULT_CONFIG.tunings);
 		expect(mergeConfig({ tunings: [{ name: 'x' }] }).tunings).toEqual(DEFAULT_CONFIG.tunings);
 		expect(mergeConfig({ chords: 3 }).chords).toEqual(DEFAULT_CONFIG.chords);
@@ -147,5 +148,12 @@ describe('reserved names', () => {
 		const config = mergeConfig(saved);
 		expect(config.chords).toEqual(DEFAULT_CONFIG.chords);
 		expect(config.tunings).toEqual(DEFAULT_CONFIG.tunings);
+	});
+});
+
+describe('default staff size', () => {
+	it('fits a typical pane without wrapping', () => {
+		const [row] = generateStaff(DEFAULT_CONFIG.tunings[0]!.strings, DEFAULT_CONFIG.measures, DEFAULT_CONFIG.beats);
+		expect(row!.length).toBeLessThanOrEqual(60);
 	});
 });
