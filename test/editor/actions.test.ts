@@ -2,6 +2,7 @@ import { EditorSelection } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/core/config';
 import { type Action, applyAction, applyBeats, applyTuning, enterAt, enterChord, insertStaff } from '../../src/editor/actions';
+import { buildDecorations } from '../../src/editor/decorations';
 import { currentStaff, modeField } from '../../src/editor/mode';
 import { applyResult, cursor, digits, DOC, lines, makeState, run, runUndo, STAFF, tabState } from './helpers';
 
@@ -332,6 +333,29 @@ describe('chord mode', () => {
 		expect(state.field(modeField).kind).toBe('chord');
 	});
 
+	describe('when the staff changes row count', () => {
+		const ROW = 'G|------|------|\n';
+
+		it('falls back to tab mode when a row is added', () => {
+			const start = chordState();
+			const next = start.update({ changes: { from: start.doc.line(3).from, insert: ROW } }).state;
+			expect(next.field(modeField).kind).toBe('tab');
+			expect(chord(next)).toBeNull();
+			expect(() => buildDecorations(next, config)).not.toThrow();
+		});
+
+		it('falls back to tab mode when a row is removed', () => {
+			const doc = ['```tab', ...STAFF, ROW.trim(), '```'];
+			const three = { ...config, chords: { default: { Tri: ['0', '1', '2'] } } };
+			const base = tabState(doc, 1, 5);
+			const start = applyResult(base, enterChord(base, 'Tri', three));
+			const line = start.doc.line(4);
+			const next = start.update({ changes: { from: line.from - 1, to: line.to } }).state;
+			expect(next.field(modeField).kind).toBe('tab');
+			expect(chord(next)).toBeNull();
+		});
+	});
+
 	describe('moving to another staff', () => {
 		const three = ['e|---|', 'B|---|', 'G|---|'];
 
@@ -361,5 +385,28 @@ describe('chord mode', () => {
 			expect(next?.names).toEqual(['Alpha', 'Beta', 'Delta', 'Gamma']);
 			expect(next?.names[next.index]).toBe('Beta');
 		});
+	});
+});
+
+describe('insertStaff above an existing staff', () => {
+	const NOTE = ['```tab', 'Verse', ...STAFF, '```'];
+	const sameLayout = { ...DEFAULT_CONFIG, beats: 2, measures: 2, tunings: [{ name: 'T', strings: ['B', 'e'] }] };
+
+	it('keeps 2 blank lines after the new staff when the layouts match', () => {
+		const state = run(makeState(NOTE, 1, 0), 'newStaff', sameLayout);
+		expect(lines(state)).toEqual(['```tab', 'Verse', '', '', ...STAFF, '', '', ...STAFF, '```']);
+		expect(currentStaff(state)?.staff.rows).toHaveLength(2);
+		expect(cursor(state)).toEqual({ row: 4, col: 2 });
+	});
+
+	it('stays usable when the layouts differ', () => {
+		const state = run(makeState(NOTE, 1, 0), 'newStaff');
+		expect(currentStaff(state)?.staff.rows).toHaveLength(6);
+		expect(lines(digits(state, '7'))[4]).toMatch(/^e\|7-/);
+	});
+
+	it('separates the new staff from one directly after the opening fence', () => {
+		const state = run(makeState(DOC, 0, 0), 'newStaff', sameLayout);
+		expect(lines(state)).toEqual(['```tab', '', '', ...STAFF, '', '', ...STAFF, '```']);
 	});
 });

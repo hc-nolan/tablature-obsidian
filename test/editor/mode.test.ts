@@ -127,3 +127,39 @@ describe('selection changes in tab mode', () => {
 		expect((cursor(state).col - 2) % 3).toBe(0);
 	});
 });
+
+describe('the cursor must stay on the staff', () => {
+	const NOTE = ['para', ...DOC];
+
+	it('exits when undo moves the cursor off an intact staff, and writes nothing', () => {
+		const edited = makeState(NOTE, 0, 0).update({ changes: { from: 0, insert: 'x' } }).state;
+		const placed = edited.update({ selection: { anchor: edited.doc.line(3).from + 2 } }).state;
+		const undone = runUndo(enter(placed));
+		expect(cursor(undone).row).toBe(0);
+		expect(undone.field(modeField).kind).toBe('off');
+		expect(lines(digits(undone, '7'))).toEqual(NOTE);
+	});
+
+	it('exits when the selection moves off the staff without a select event', () => {
+		const start = tabState(NOTE, 2, 2);
+		const moved = start.update({ selection: { anchor: 0 } }).state;
+		expect(moved.field(modeField)).toEqual({ kind: 'off', notice: null });
+		expect(lines(digits(moved, '7'))).toEqual(NOTE);
+	});
+
+	it('exits with a notice when a line inserted inside the staff leaves the cursor outside it', () => {
+		const start = tabState(['```tab', 'e|---|', 'B|---|', 'G|---|', '```'], 3, 2);
+		const split = start.update({ changes: { from: start.doc.line(4).from, insert: 'text\n' } }).state;
+		const mode = split.field(modeField);
+		expect(mode.kind).toBe('off');
+		expect(mode.kind === 'off' && mode.notice).toMatch(/staff/i);
+		expect(split.doc.line(5).text).toBe('G|---|');
+		expect(lines(digits(split, '7'))).toEqual(lines(split));
+	});
+
+	it('stays on when the selection moves within the staff without a select event', () => {
+		const start = tabState(DOC, 1, 2);
+		const moved = start.update({ selection: { anchor: start.doc.line(3).from + 5 } }).state;
+		expect(moved.field(modeField).kind).toBe('tab');
+	});
+});

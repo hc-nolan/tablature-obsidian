@@ -1,6 +1,15 @@
 // Per-editor tab and chord mode state.
 
-import { type ChangeSpec, EditorSelection, EditorState, type Extension, StateEffect, StateField, type Text } from '@codemirror/state';
+import {
+	type ChangeSpec,
+	EditorSelection,
+	EditorState,
+	type Extension,
+	StateEffect,
+	StateField,
+	type Text,
+	type Transaction,
+} from '@codemirror/state';
 import { staffAt } from '../core/blocks';
 import type { Shape } from '../core/config';
 import { colToPos, type LineEdit, parseStaff, type ParseResult, posToCol, type Pos, type Staff } from '../core/staff';
@@ -24,6 +33,7 @@ export const OFF: ModeState = { kind: 'off', notice: null };
 export const setMode = StateEffect.define<ModeState>();
 
 const STAFF_GONE = 'The staff you were editing is gone, so tab mode has exited.';
+const CURSOR_LEFT = 'That change moved the cursor off the staff, so tab mode has exited.';
 
 type Located = { ok: true; result: ParseResult & { ok: true } } | { ok: false; notice: string };
 
@@ -54,9 +64,20 @@ export const modeField = StateField.define<ModeState>({
 		for (const effect of tr.effects) {
 			if (effect.is(setMode)) next = effect.value;
 		}
-		return next;
+		return tr.docChanged || tr.selection || next !== value ? enforceInvariant(next, tr) : next;
 	},
 });
+
+/** While a mode is active, its staff is valid, the cursor is on it, and any chord shape fits it. */
+function enforceInvariant(mode: ModeState, tr: Transaction): ModeState {
+	if (mode.kind === 'off') return mode;
+	const found = locate(tr.newDoc, mode.staffFrom);
+	if (!found.ok) return { kind: 'off', notice: found.notice };
+	const { staff } = found.result;
+	const row = tr.newDoc.lineAt(tr.newSelection.main.head).number - 1 - staff.top;
+	if (row < 0 || row >= staff.rows.length) return { kind: 'off', notice: tr.docChanged ? CURSOR_LEFT : null };
+	return chordAfterSwitch({ ...mode, staffFrom: tr.newDoc.line(staff.top + 1).from }, staff);
+}
 
 export function currentStaff(state: EditorState): { staff: Staff; row: number; pos: Pos } | null {
 	const mode = state.field(modeField);
@@ -65,7 +86,8 @@ export function currentStaff(state: EditorState): { staff: Staff; row: number; p
 	if (!found.ok) return null;
 	const { staff } = found.result;
 	const line = state.doc.lineAt(state.selection.main.head);
-	const row = Math.max(0, Math.min(staff.rows.length - 1, line.number - 1 - staff.top));
+	const row = line.number - 1 - staff.top;
+	if (row < 0 || row >= staff.rows.length) return null;
 	return { staff, row, pos: colToPos(staff, state.selection.main.head - line.from) };
 }
 

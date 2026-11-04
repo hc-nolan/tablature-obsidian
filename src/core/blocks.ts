@@ -96,7 +96,9 @@ export function planInsertStaff(
 	if (block?.eligible) {
 		const current = staffAt(lines, row);
 		const afterRow = current ? current.top + current.height - 1 : row;
-		return appendAfter(afterRow, `\n\n\n${staffLines}`, afterRow + 3);
+		// Without a gap, a staff on the next line would merge with the new one.
+		const gap = isStaffLine(lines[afterRow + 1] ?? '') ? '\n\n' : '';
+		return appendAfter(afterRow, `\n\n\n${staffLines}${gap}`, afterRow + 3);
 	}
 
 	const newBlock = `\n\`\`\`tab\n${staffLines}\n\`\`\``;

@@ -14,6 +14,8 @@ export interface KeyInput {
 	altGraph: boolean;
 	shift: boolean;
 	composing: boolean;
+	/** On macOS, Option types characters such as { on many layouts. */
+	mac: boolean;
 }
 
 export type KeyResult = { kind: 'pass' } | { kind: 'swallow' } | { kind: 'action'; action: Action };
@@ -24,6 +26,7 @@ export interface EditorDeps {
 	pickShape(names: string[]): Promise<string | null>;
 	promptBeats(measure: number, current: number): Promise<number | null>;
 	notify(message: string): void;
+	isMac: boolean;
 }
 
 const MOVEMENT: Record<string, Action['type']> = {
@@ -66,7 +69,8 @@ const CHORD_KEYS: Record<string, Action['type']> = {
 export function resolveKey(mode: 'tab' | 'chord', input: KeyInput): KeyResult {
 	if (input.composing || /^F\d+$/.test(input.key)) return { kind: 'pass' };
 	// AltGr types characters such as { on many layouts, and some platforms report it as Ctrl+Alt.
-	if (!input.altGraph && (input.ctrl || input.meta || input.alt)) return { kind: 'pass' };
+	const optionTyped = input.mac && input.alt && !input.ctrl && !input.meta && [...input.key].length === 1;
+	if (!input.altGraph && !optionTyped && (input.ctrl || input.meta || input.alt)) return { kind: 'pass' };
 
 	if (mode === 'tab' && /^\d$/.test(input.key)) return { kind: 'action', action: { type: 'digit', digit: input.key } };
 	if (mode === 'chord' && input.key === 'Tab' && input.shift) return { kind: 'action', action: { type: 'prevShape' } };
@@ -134,6 +138,7 @@ export function keyPlugin(deps: EditorDeps): Extension {
 					altGraph: event.getModifierState('AltGraph'),
 					shift: event.shiftKey,
 					composing: event.isComposing,
+					mac: deps.isMac,
 				});
 				if (result.kind === 'pass') return;
 				event.preventDefault();

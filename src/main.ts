@@ -1,7 +1,7 @@
 // Registers the editor extensions, commands and settings tab.
 
 import type { EditorView } from '@codemirror/view';
-import { type Editor, MarkdownView, Notice, Plugin } from 'obsidian';
+import { type Editor, MarkdownView, Notice, Platform, Plugin } from 'obsidian';
 import { type Config, mergeConfig } from './core/config';
 import { enterAt } from './editor/actions';
 import { decorationsExtension } from './editor/decorations';
@@ -27,6 +27,7 @@ export default class TablaturePlugin extends Plugin {
 			pickShape: (names) => pickShape(this.app, names),
 			promptBeats: (measure, current) => promptBeats(this.app, measure, current),
 			notify: (message) => new Notice(message),
+			isMac: Platform.isMacOS,
 		};
 
 		this.registerEditorExtension([

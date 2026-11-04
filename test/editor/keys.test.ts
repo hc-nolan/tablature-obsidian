@@ -17,6 +17,7 @@ const input = (key: string, extra: Partial<KeyInput> = {}): KeyInput => ({
 	altGraph: false,
 	shift: false,
 	composing: false,
+	mac: false,
 	...extra,
 });
 
@@ -79,6 +80,16 @@ describe('resolveKey in tab mode', () => {
 			kind: 'action',
 			action: { type: 'digit', digit: '1' },
 		});
+	});
+
+	it('treats Option as typing on macOS', () => {
+		expect(resolveKey('tab', input('{', { alt: true, mac: true }))).toEqual(action('prevMeasure'));
+		expect(resolveKey('tab', input('˙', { alt: true, mac: true }))).toEqual({ kind: 'swallow' });
+	});
+
+	it('still passes Option with a named key or another modifier on macOS', () => {
+		expect(resolveKey('tab', input('ArrowLeft', { alt: true, mac: true }))).toEqual({ kind: 'pass' });
+		expect(resolveKey('tab', input('z', { alt: true, meta: true, mac: true }))).toEqual({ kind: 'pass' });
 	});
 
 	it('matches Shift-typed digits, as on AZERTY', () => {
@@ -147,6 +158,7 @@ describe('with a real editor', () => {
 			pickShape: () => Promise.resolve(null),
 			promptBeats: () => Promise.resolve(null),
 			notify: vi.fn(),
+			isMac: false,
 			...overrides,
 		};
 	}
