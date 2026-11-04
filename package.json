@@ -1,6 +1,6 @@
 {
   "name": "tablature",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Write and edit guitar tabs from the keyboard, in fenced code blocks.",
   "main": "main.js",
   "type": "module",
