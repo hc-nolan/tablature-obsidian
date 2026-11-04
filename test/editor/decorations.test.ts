@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import type { EditorState } from '@codemirror/state';
-import type { Decoration, DecorationSet } from '@codemirror/view';
-import { describe, expect, it } from 'vitest';
+import { EditorState, StateEffect, type TransactionSpec } from '@codemirror/state';
+import { type Decoration, type DecorationSet, EditorView } from '@codemirror/view';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/core/config';
 import { parseStaff, type Staff } from '../../src/core/staff';
-import { enterChord } from '../../src/editor/actions';
-import { buildDecorations, indicatorText, legendText } from '../../src/editor/decorations';
+import { enterAt, enterChord } from '../../src/editor/actions';
+import { buildDecorations, decorationsExtension, indicatorText, legendText } from '../../src/editor/decorations';
+import { type EditorDeps, keyPlugin } from '../../src/editor/keys';
+import { modeField, selectionFilter } from '../../src/editor/mode';
 import { applyResult, DOC, makeState, run, tabState } from './helpers';
 
 type Found = { from: number; to: number; spec: { class?: string; block?: boolean; widget?: { text: string }; side?: number } };
@@ -109,5 +111,60 @@ describe('buildDecorations', () => {
 		const blocks = collect(buildDecorations(state, config), state).filter((d) => d.spec.block);
 		expect(blocks[1]?.spec.widget?.text).toContain('Muted');
 		expect(blocks[1]?.spec.widget?.text).not.toContain('Esc exit');
+	});
+});
+
+describe('in an editor that is already open', () => {
+	const deps: EditorDeps = {
+		getConfig: () => config,
+		pickTuning: () => Promise.resolve(null),
+		pickShape: () => Promise.resolve(null),
+		promptBeats: () => Promise.resolve(null),
+		notify: () => undefined,
+		isMac: false,
+	};
+	const extensions = () => [modeField, selectionFilter, keyPlugin(deps), decorationsExtension(() => config)];
+	let view: EditorView;
+
+	beforeEach(() => {
+		vi.stubGlobal('createEl', (tag: string, info: { text: string }) => {
+			const element = document.createElement(tag);
+			element.textContent = info.text;
+			return element;
+		});
+		const state = EditorState.create({ doc: DOC.join('\n'), selection: { anchor: 9 } });
+		view = new EditorView({ state, parent: document.body });
+	});
+
+	afterEach(() => {
+		view.destroy();
+		vi.unstubAllGlobals();
+	});
+
+	const enable = () => view.dispatch({ effects: StateEffect.appendConfig.of(extensions()) });
+
+	it('can be enabled', () => {
+		expect(enable).not.toThrow();
+		expect(view.state.field(modeField).kind).toBe('off');
+	});
+
+	it('works after being enabled', () => {
+		enable();
+		view.dispatch(enterAt(view.state, config).spec as TransactionSpec);
+		expect(view.state.field(modeField).kind).toBe('tab');
+		expect(view.dom.querySelectorAll('.tablature-measure').length).toBeGreaterThan(0);
+	});
+
+	it('can be disabled during tab mode, removing its decorations', () => {
+		enable();
+		view.dispatch(enterAt(view.state, config).spec as TransactionSpec);
+		expect(() => view.dispatch({ effects: StateEffect.reconfigure.of([]) })).not.toThrow();
+		expect(view.dom.querySelectorAll('.tablature-measure')).toHaveLength(0);
+	});
+
+	it('can be enabled again after being disabled', () => {
+		enable();
+		view.dispatch({ effects: StateEffect.reconfigure.of([]) });
+		expect(enable).not.toThrow();
 	});
 });

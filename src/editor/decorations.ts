@@ -100,7 +100,7 @@ export function decorationsExtension(getConfig: () => Config): Extension {
 	return StateField.define<DecorationSet>({
 		create: (state) => buildDecorations(state, getConfig()),
 		update: (value, tr) =>
-			tr.docChanged || tr.selection || tr.startState.field(modeField) !== tr.state.field(modeField)
+			tr.docChanged || tr.selection || tr.startState.field(modeField, false) !== tr.state.field(modeField)
 				? buildDecorations(tr.state, getConfig())
 				: value,
 		provide: (field) => EditorView.decorations.from(field),

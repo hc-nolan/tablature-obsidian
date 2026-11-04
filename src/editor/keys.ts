@@ -159,7 +159,7 @@ export function keyPlugin(deps: EditorDeps): Extension {
 			view.contentDOM.addEventListener('blur', onBlur);
 			return {
 				update(update) {
-					const before = update.startState.field(modeField);
+					const before = update.startState.field(modeField, false);
 					const after = update.state.field(modeField);
 					if (before !== after && after.kind === 'off' && after.notice) deps.notify(after.notice);
 				},
