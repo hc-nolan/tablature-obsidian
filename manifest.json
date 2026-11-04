@@ -2,8 +2,9 @@
   "id": "tablature",
   "name": "Tablature",
   "version": "0.1.0",
-  "minAppVersion": "1.7.2",
-  "description": "Keyboard-driven guitar tab editing in fenced code blocks.",
+  "minAppVersion": "1.15.0",
+  "description": "Write and edit guitar tabs from the keyboard, in fenced code blocks.",
   "author": "hc-nolan",
+  "authorUrl": "https://github.com/hc-nolan",
   "isDesktopOnly": true
 }

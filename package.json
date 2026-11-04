@@ -1,7 +1,7 @@
 {
   "name": "tablature",
   "version": "0.1.0",
-  "description": "Keyboard-driven guitar tab editing in fenced code blocks.",
+  "description": "Write and edit guitar tabs from the keyboard, in fenced code blocks.",
   "main": "main.js",
   "type": "module",
   "license": "GPL-3.0-only",
