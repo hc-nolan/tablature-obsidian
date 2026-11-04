@@ -1,91 +1,92 @@
-// THROWAWAY spike (Task 1): verifies key capture and widgets. Replaced in Task 10.
-import { StateEffect, StateField, type EditorState, type Extension, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
-import { MarkdownView, Plugin } from 'obsidian';
+// Registers the editor extensions, commands and settings tab.
 
-const toggle = StateEffect.define<boolean>();
-const capturing = StateField.define<boolean>({
-	create: () => false,
-	update(value, tr) {
-		for (const e of tr.effects) if (e.is(toggle)) return e.value;
-		return value;
-	},
-});
+import type { EditorView } from '@codemirror/view';
+import { type Editor, MarkdownView, Notice, Plugin } from 'obsidian';
+import { type Config, mergeConfig } from './core/config';
+import { enterAt } from './editor/actions';
+import { decorationsExtension } from './editor/decorations';
+import { type EditorDeps, keyPlugin, runAction } from './editor/keys';
+import { modeField, OFF, selectionFilter, setMode } from './editor/mode';
+import { pickShape, pickTuning, promptBeats } from './pickers';
+import { TablatureSettingTab } from './settings';
 
-class Label extends WidgetType {
-	constructor(private readonly text: string) {
-		super();
-	}
-	toDOM(): HTMLElement {
-		const el = createDiv();
-		el.className = 'tablature-spike-widget';
-		el.textContent = this.text;
-		return el;
-	}
+/** Obsidian's documented route to the CodeMirror view behind an editor. */
+function editorView(editor: Editor): EditorView {
+	return (editor as unknown as { cm: EditorView }).cm;
 }
 
-function build(state: EditorState): DecorationSet {
-	if (!state.field(capturing)) return Decoration.none;
-	const builder = new RangeSetBuilder<Decoration>();
-	const rows: { from: number; to: number }[] = [];
-	for (let n = 1; n <= state.doc.lines; n++) {
-		const line = state.doc.line(n);
-		if (/^\S{1,4} *\|.*\|\s*$/.test(line.text)) rows.push(line);
-		else if (rows.length) break;
-	}
-	const first = rows[0];
-	const last = rows[rows.length - 1];
-	if (!first || !last) return Decoration.none;
-	builder.add(first.from, first.from, Decoration.widget({ widget: new Label('indicator above'), block: true, side: -1 }));
-	for (const row of rows) {
-		builder.add(row.from + 2, Math.min(row.from + 14, row.to), Decoration.mark({ class: 'tablature-spike-mark' }));
-	}
-	builder.add(last.to, last.to, Decoration.widget({ widget: new Label('legend below'), block: true, side: 1 }));
-	return builder.finish();
-}
+export default class TablaturePlugin extends Plugin {
+	config: Config = mergeConfig(null);
 
-const decorations = StateField.define<DecorationSet>({
-	create: build,
-	update: (_value, tr) => build(tr.state),
-	provide: (field) => EditorView.decorations.from(field),
-});
+	async onload(): Promise<void> {
+		this.config = mergeConfig(await this.loadData());
 
-function capture(onKey: (key: string) => void): Extension {
-	return ViewPlugin.define((view) => {
-		const handler = (event: KeyboardEvent) => {
-			if (!view.state.field(capturing)) return;
-			if (event.ctrlKey || event.metaKey || event.altKey) return;
-			event.preventDefault();
-			event.stopPropagation();
-			onKey(event.key);
+		const deps: EditorDeps = {
+			getConfig: () => this.config,
+			pickTuning: (options, current) => pickTuning(this.app, options, current),
+			pickShape: (names) => pickShape(this.app, names),
+			promptBeats: (measure, current) => promptBeats(this.app, measure, current),
+			notify: (message) => new Notice(message),
 		};
-		view.dom.addEventListener('keydown', handler, true);
-		return { destroy: () => view.dom.removeEventListener('keydown', handler, true) };
-	});
-}
 
-export default class SpikePlugin extends Plugin {
-	onload(): void {
-		const status = this.addStatusBarItem();
-		status.setText('Spike: off');
 		this.registerEditorExtension([
-			capturing,
-			decorations,
-			capture((key) => status.setText(`Spike: last key "${key}"`)),
+			modeField,
+			selectionFilter,
+			keyPlugin(deps),
+			decorationsExtension(() => this.config),
 		]);
+
 		this.addCommand({
-			id: 'spike-toggle',
-			name: 'Spike: toggle capture',
-			checkCallback: (checking) => {
-				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (!view) return false;
-				if (checking) return true;
-				const cm = (view.editor as unknown as { cm: EditorView }).cm;
-				const on = !cm.state.field(capturing);
-				cm.dispatch({ effects: toggle.of(on) });
-				status.setText(on ? 'Spike: capturing' : 'Spike: off');
+			id: 'insert-staff',
+			name: 'Insert staff',
+			editorCheckCallback: (checking, editor, ctx) => {
+				if (ctx instanceof MarkdownView && ctx.getMode() === 'preview') return false;
+				if (!checking) runAction(editorView(editor), { type: 'newStaff' }, deps);
 				return true;
 			},
+		});
+
+		this.addCommand({
+			id: 'enter-tab-mode',
+			name: 'Enter tab mode',
+			editorCheckCallback: (checking, editor, ctx) => {
+				if (ctx instanceof MarkdownView && ctx.getMode() === 'preview') return false;
+				if (!checking) {
+					const view = editorView(editor);
+					const result = enterAt(view.state, this.config);
+					if (result.spec) view.dispatch(result.spec);
+					if (result.notice) deps.notify(result.notice);
+				}
+				return true;
+			},
+		});
+
+		this.addSettingTab(new TablatureSettingTab(this.app, this));
+
+		// A note opened in the same pane reuses the active view, so this one includes it.
+		this.registerEvent(this.app.workspace.on('file-open', () => this.exitWhere(() => true)));
+		this.registerEvent(
+			this.app.workspace.on('active-leaf-change', () => {
+				const active = this.app.workspace.getActiveViewOfType(MarkdownView);
+				this.exitWhere((view) => view !== active);
+			}),
+		);
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => this.exitWhere((view) => view.getMode() === 'preview')),
+		);
+	}
+
+	async saveConfig(): Promise<void> {
+		await this.saveData(this.config);
+	}
+
+	/** Silently leaves tab mode in every open note that matches. */
+	private exitWhere(matches: (view: MarkdownView) => boolean): void {
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (!(leaf.view instanceof MarkdownView) || !matches(leaf.view)) return;
+			const cm = editorView(leaf.view.editor);
+			const mode = cm.state.field(modeField, false);
+			if (mode && mode.kind !== 'off') cm.dispatch({ effects: setMode.of(OFF) });
 		});
 	}
 }
