@@ -32,6 +32,8 @@ const MOVEMENT: [string, Action['type']][] = [
 	['}', 'nextMeasure'],
 	['j', 'nextString'],
 	['k', 'prevString'],
+	['ArrowDown', 'nextString'],
+	['ArrowUp', 'prevString'],
 	['Escape', 'exit'],
 	['q', 'exit'],
 ];
