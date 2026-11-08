@@ -37,6 +37,7 @@ const MOVEMENT: [string, Action['type']][] = [
 	['ArrowUp', 'prevString'],
 	['Escape', 'exit'],
 	['q', 'exit'],
+	['?', 'toggleKeys'],
 ];
 
 describe('resolveKey in tab mode', () => {
@@ -48,6 +49,7 @@ describe('resolveKey in tab mode', () => {
 		['B', 'pickBeats'],
 		['C', 'pickShape'],
 		['N', 'newStaff'],
+		['I', 'swapInstrument'],
 	])('%j → %s', (key, type) => {
 		expect(resolveKey('tab', input(key))).toEqual(action(type));
 	});
@@ -115,6 +117,8 @@ describe('resolveKey in chord mode', () => {
 	it('cycles shapes with Tab and Shift+Tab', () => {
 		expect(resolveKey('chord', input('Tab'))).toEqual(action('nextShape'));
 		expect(resolveKey('chord', input('Tab', { shift: true }))).toEqual(action('prevShape'));
+		expect(resolveKey('chord', input('?', { shift: true }))).toEqual(action('toggleKeys'));
+		expect(resolveKey('tab', input('?', { shift: true }))).toEqual(action('toggleKeys'));
 	});
 
 	it.each(['5', 'T', 'B', 'N', ' ', 'Backspace', 'z'])('swallows %j', (key) => {

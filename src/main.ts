@@ -6,7 +6,7 @@ import { type Config, mergeConfig } from './core/config';
 import { enterAt } from './editor/actions';
 import { decorationsExtension } from './editor/decorations';
 import { type EditorDeps, keyPlugin, runAction } from './editor/keys';
-import { modeField, OFF, selectionFilter, setMode } from './editor/mode';
+import { keysExpandedField, modeField, OFF, selectionFilter, setMode } from './editor/mode';
 import { pickShape, pickTuning, promptBeats } from './pickers';
 import { TablatureSettingTab } from './settings';
 
@@ -32,6 +32,7 @@ export default class TablaturePlugin extends Plugin {
 
 		this.registerEditorExtension([
 			modeField,
+			keysExpandedField,
 			selectionFilter,
 			keyPlugin(deps),
 			decorationsExtension(() => this.config),

@@ -9,11 +9,32 @@ import { applyResult, cursor, digits, DOC, lines, makeState, run, runUndo, STAFF
 const STD_ROWS = ['e', 'B', 'G', 'D', 'A', 'E'].map((label) => `${label}|---|`);
 
 describe('enterAt', () => {
-	it('gives a notice off a staff and stays off', () => {
-		const state = makeState(DOC, 0, 0);
-		const result = enterAt(state, DEFAULT_CONFIG);
-		expect(result.notice).toMatch(/staff/i);
+	it('inserts a guitar staff and enters tab mode off a staff', () => {
+		const state = applyResult(makeState(['text'], 0, 0), enterAt(makeState(['text'], 0, 0), DEFAULT_CONFIG));
+		expect(state.field(modeField).kind).toBe('tab');
+		expect(lines(state).filter((line) => line.includes('|'))).toHaveLength(6);
+		expect(cursor(state)).toEqual({ row: 2, col: 2 });
+	});
+
+	it('inserts a bass staff when new staves use bass', () => {
+		const config = { ...DEFAULT_CONFIG, instrument: 'bass' as const };
+		const state = applyResult(makeState(['text'], 0, 0), enterAt(makeState(['text'], 0, 0), config));
+		expect(state.field(modeField).kind).toBe('tab');
+		expect(lines(state).filter((line) => line.includes('|')).map((line) => line[0])).toEqual(['G', 'D', 'A', 'E']);
+	});
+
+	it('names the problem when no staff can be inserted', () => {
+		const result = enterAt(makeState(['```js', 'text'], 1, 0), DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/closing fence/);
 		expect(result.spec).toBeUndefined();
+	});
+
+	it('inserts a staff at the cursor inside an existing tab block', () => {
+		const doc = ['```tab', 'Verse', ...STAFF, '```'];
+		const state = applyResult(makeState(doc, 1, 0), enterAt(makeState(doc, 1, 0), DEFAULT_CONFIG));
+		expect(state.field(modeField).kind).toBe('tab');
+		// A guitar staff by default, plus the 2 existing rows.
+		expect(lines(state).filter((line) => line.includes('|'))).toHaveLength(8);
 	});
 
 	it('names the problem on an invalid staff', () => {
@@ -142,12 +163,29 @@ describe('writing', () => {
 		expect(lines(digits(tabState(DOC, 1, 2), '123'))[1]).toBe('e|3-----|------|');
 	});
 
-	it('clears and clears-then-moves-left', () => {
+	it('clears the current cell', () => {
 		const written = digits(tabState(DOC, 1, 5), '12');
 		expect(lines(run(written, 'clear'))[1]).toBe('e|------|------|');
-		const left = run(written, 'clearLeft');
-		expect(lines(left)[1]).toBe('e|------|------|');
-		expect(cursor(left)).toEqual({ row: 1, col: 2 });
+	});
+
+	it('clears the previous cell and moves onto it, like Backspace in text', () => {
+		const written = run(digits(run(digits(tabState(DOC, 1, 2), '0'), 'right'), '1'), 'clearLeft');
+		expect(lines(written)[1]).toBe('e|---1--|------|');
+		expect(cursor(written)).toEqual({ row: 1, col: 2 });
+	});
+
+	it('crosses a bar when clearing left', () => {
+		const written = run(run(tabState(DOC, 1, 5), 'right'), 'clearLeft');
+		expect(cursor(written)).toEqual({ row: 1, col: 5 });
+		const noted = run(digits(tabState(DOC, 1, 5), '7'), 'right');
+		expect(lines(run(noted, 'clearLeft'))[1]).toBe('e|------|------|');
+	});
+
+	it('does nothing on the first beat', () => {
+		const state = digits(tabState(DOC, 1, 2), '5');
+		const after = run(state, 'clearLeft');
+		expect(lines(after)[1]).toBe('e|5-----|------|');
+		expect(cursor(after)).toEqual({ row: 1, col: 2 });
 	});
 
 	it('clears pending on clear', () => {
@@ -388,6 +426,34 @@ describe('chord mode', () => {
 	});
 });
 
+describe('swapInstrument', () => {
+	const GUITAR = ['```tab', ...['e', 'B', 'G', 'D', 'A', 'E'].map((l) => `${l}|------|`), '```'];
+
+	it('converts guitar to bass and back, staying on the same string', () => {
+		const bass = run(tabState(GUITAR, 6, 2), 'swapInstrument');
+		expect(lines(bass).slice(1, 5)).toEqual(['G|------|', 'D|------|', 'A|------|', 'E|------|']);
+		expect(cursor(bass)).toEqual({ row: 4, col: 2 });
+		expect(bass.field(modeField).kind).toBe('tab');
+
+		const guitar = run(bass, 'swapInstrument');
+		expect(lines(guitar)).toEqual(GUITAR);
+		expect(cursor(guitar)).toEqual({ row: 6, col: 2 });
+	});
+
+	it('moves to the highest remaining string when the current one is removed', () => {
+		expect(cursor(run(tabState(GUITAR, 1, 2), 'swapInstrument'))).toEqual({ row: 1, col: 2 });
+	});
+
+	it('refuses when a removed string has notes, and is undoable otherwise', () => {
+		const noted = ['```tab', 'e|5-----|', ...GUITAR.slice(2)];
+		const result = applyAction(tabState(noted, 3, 2), { type: 'swapInstrument' }, DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/notes/);
+		expect(result.spec).toBeUndefined();
+
+		expect(lines(runUndo(run(tabState(GUITAR, 3, 2), 'swapInstrument')))).toEqual(GUITAR);
+	});
+});
+
 describe('insertStaff above an existing staff', () => {
 	const NOTE = ['```tab', 'Verse', ...STAFF, '```'];
 	const sameLayout = { ...DEFAULT_CONFIG, beats: 2, measures: 2, tunings: [{ name: 'T', strings: ['B', 'e'] }] };
@@ -405,8 +471,8 @@ describe('insertStaff above an existing staff', () => {
 		expect(lines(digits(state, '7'))[4]).toMatch(/^e\|7-/);
 	});
 
-	it('separates the new staff from one directly after the opening fence', () => {
+	it('puts the new staff directly below the opening fence and separates it from the existing one', () => {
 		const state = run(makeState(DOC, 0, 0), 'newStaff', sameLayout);
-		expect(lines(state)).toEqual(['```tab', '', '', ...STAFF, '', '', ...STAFF, '```']);
+		expect(lines(state)).toEqual(['```tab', ...STAFF, '', '', ...STAFF, '```']);
 	});
 });

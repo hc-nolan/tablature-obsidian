@@ -12,10 +12,16 @@ export type Shape = string[];
 /** Scope ('default' or a tuning name) → shape name → shape. */
 export type ChordLibrary = Record<string, Record<string, Shape>>;
 
+export type Instrument = 'guitar' | 'bass';
+
 export interface Config {
 	beats: number;
 	measures: number;
+	/** The instrument used when a staff is inserted from scratch. */
+	instrument: Instrument;
+	/** Guitar tunings. */
 	tunings: Tuning[];
+	bassTunings: Tuning[];
 	chords: ChordLibrary;
 }
 
@@ -26,15 +32,25 @@ const shape = (text: string): Shape => text.split(' ');
 export const DEFAULT_CONFIG: Config = {
 	beats: 4,
 	measures: 4,
+	instrument: 'guitar',
 	tunings: [
 		{ name: 'Standard', strings: ['E', 'A', 'D', 'G', 'B', 'e'] },
 		{ name: 'Drop D', strings: ['D', 'A', 'D', 'G', 'B', 'e'] },
+	],
+	bassTunings: [
+		{ name: 'Bass standard', strings: ['E', 'A', 'D', 'G'] },
+		{ name: 'Bass drop D', strings: ['D', 'A', 'D', 'G'] },
 	],
 	chords: {
 		default: {
 			'Power 5th (E root)': shape('0 2 2 x x x'),
 			'Power 5th (A root)': shape('x 0 2 2 x x'),
 			'Power 5th (D root)': shape('x x 0 2 2 x'),
+			'Bass 5th (E root)': shape('0 2 x x'),
+			'Bass 5th (A root)': shape('x 0 2 x'),
+			'Bass 5th (D root)': shape('x x 0 2'),
+			'Bass octave (E root)': shape('0 x 2 x'),
+			'Bass octave (A root)': shape('x 0 x 2'),
 		},
 		Standard: {
 			'Major (E shape)': shape('0 2 2 1 0 0'),
@@ -181,10 +197,56 @@ function validChords(value: unknown): ChordLibrary | null {
 
 export function mergeConfig(saved: unknown): Config {
 	const data = asRecord(saved) ?? {};
-	return {
+	const config: Config = {
 		beats: isPositiveInt(data['beats']) ? data['beats'] : DEFAULT_CONFIG.beats,
 		measures: isPositiveInt(data['measures']) ? data['measures'] : DEFAULT_CONFIG.measures,
+		instrument: data['instrument'] === 'bass' ? 'bass' : 'guitar',
 		tunings: validTunings(data['tunings']) ?? DEFAULT_CONFIG.tunings,
+		bassTunings: validTunings(data['bassTunings']) ?? DEFAULT_CONFIG.bassTunings,
 		chords: validChords(data['chords']) ?? DEFAULT_CONFIG.chords,
 	};
+	// Built-in tunings and shapes are always available, including ones added in an update. User entries are kept.
+	return addMissingDefaults(config).config;
+}
+
+export function allTunings(config: Config): Tuning[] {
+	return [...config.tunings, ...config.bassTunings];
+}
+
+/** The default tuning for new staves of an instrument: the first in its list. */
+export function defaultTuning(config: Config, instrument: Instrument): Tuning {
+	const list = instrument === 'bass' ? config.bassTunings : config.tunings;
+	const fallback = instrument === 'bass' ? DEFAULT_CONFIG.bassTunings : DEFAULT_CONFIG.tunings;
+	return (list[0] ?? fallback[0]) as Tuning;
+}
+
+/**
+ * Adds every default tuning and chord shape whose name isn't already in use, so an install whose settings predate
+ * new defaults still has them. Existing entries are never changed. `mergeConfig` runs this on load, so the plugin
+ * always has the built-ins; the settings screens also show them.
+ */
+export function addMissingDefaults(config: Config): { config: Config; added: number } {
+	let added = 0;
+	const names = new Set(allTunings(config).map(({ name }) => name));
+	const missing = (defaults: Tuning[]): Tuning[] => {
+		const extra = defaults.filter(({ name }) => !names.has(name));
+		for (const { name } of extra) names.add(name);
+		added += extra.length;
+		return extra;
+	};
+	const tunings = [...config.tunings, ...missing(DEFAULT_CONFIG.tunings)];
+	const bassTunings = [...config.bassTunings, ...missing(DEFAULT_CONFIG.bassTunings)];
+
+	const chords: ChordLibrary = Object.fromEntries(
+		Object.entries(config.chords).map(([scope, group]) => [scope, { ...group }]),
+	);
+	for (const [scope, group] of Object.entries(DEFAULT_CONFIG.chords)) {
+		for (const [name, values] of Object.entries(group)) {
+			const target = (chords[scope] ??= {});
+			if (Object.prototype.hasOwnProperty.call(target, name)) continue;
+			target[name] = [...values];
+			added++;
+		}
+	}
+	return { config: { ...config, tunings, bassTunings, chords }, added };
 }

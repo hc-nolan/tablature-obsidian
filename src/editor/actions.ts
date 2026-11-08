@@ -4,7 +4,7 @@ import { isolateHistory } from '@codemirror/commands';
 import { EditorSelection, type EditorState, type TransactionSpec } from '@codemirror/state';
 import { nextStaff, planInsertStaff, prevStaff, type StaffRange } from '../core/blocks';
 import { applyRoot, availableShapes, matchTuning, maxRoot, writeVoicing } from '../core/chords';
-import type { Config, Shape, Tuning } from '../core/config';
+import { allTunings, type Config, defaultTuning, type Instrument, type Shape, type Tuning } from '../core/config';
 import {
 	clampPos,
 	clearCell,
@@ -14,6 +14,7 @@ import {
 	posToCol,
 	type Pos,
 	relabel,
+	restring,
 	setMeasureBeats,
 	type Staff,
 	staffLabelsLowToHigh,
@@ -28,6 +29,7 @@ import {
 	parseStaffAtRow,
 	setMode,
 	toChanges,
+	toggleKeys,
 } from './mode';
 
 export type Action =
@@ -45,6 +47,8 @@ export type Action =
 				| 'pickBeats'
 				| 'pickShape'
 				| 'newStaff'
+				| 'swapInstrument'
+				| 'toggleKeys'
 				| 'exit';
 	  }
 	| { type: 'digit'; digit: string }
@@ -165,11 +169,11 @@ export function enterChord(state: EditorState, shapeName: string, config: Config
 	return { spec: { effects: setMode.of({ ...mode, kind: 'chord', pending: false, chord: { names, shapes, index, root: 0 } }) } };
 }
 
-export function enterAt(state: EditorState, _config: Config): ActionResult {
+export function enterAt(state: EditorState, config: Config): ActionResult {
 	const head = state.selection.main.head;
 	const line = state.doc.lineAt(head);
 	const parsed = parseStaffAtRow(state.doc, line.number - 1);
-	if (!parsed) return { notice: 'Put the cursor on a tab staff inside a code block first.' };
+	if (!parsed) return insertStaff(state, config);
 	if (!parsed.ok) return { notice: parsed.problem };
 
 	const mode: ActiveMode = {
@@ -181,14 +185,13 @@ export function enterAt(state: EditorState, _config: Config): ActionResult {
 	};
 	const entered = state.update({ effects: setMode.of(mode), selection: EditorSelection.single(head) }).state;
 	const info = currentStaff(entered);
-	if (!info) return { notice: 'Put the cursor on a tab staff inside a code block first.' };
-	return moveTo(state, mode, info.staff, info.row, info.pos);
+	return info ? moveTo(state, mode, info.staff, info.row, info.pos) : {};
 }
 
 export function insertStaff(state: EditorState, config: Config): ActionResult {
 	const row = state.doc.lineAt(state.selection.main.head).number - 1;
 	const here = parseStaffAtRow(state.doc, row);
-	const labels = here?.ok ? staffLabelsLowToHigh(here.staff) : (config.tunings[0] as Tuning).strings;
+	const labels = here?.ok ? staffLabelsLowToHigh(here.staff) : defaultTuning(config, config.instrument).strings;
 	const plan = planInsertStaff(state.doc.toJSON(), row, labels, config.measures, config.beats);
 	if (!plan.ok) return { notice: plan.problem };
 
@@ -212,6 +215,23 @@ export function applyTuning(state: EditorState, tuning: Tuning): ActionResult {
 	if (mode.kind === 'off' || !info) return {};
 	const edits = relabel(info.staff, tuning.strings);
 	return editSpec(state, mode, info.staff, edits, info.row, info.pos, false);
+}
+
+/** A staff counts as bass if it matches a bass tuning, or matches no tuning and has a bass string count. */
+function instrumentOf(staff: Staff, config: Config): Instrument {
+	if (matchTuning(staff, config.bassTunings)) return 'bass';
+	if (matchTuning(staff, config.tunings)) return 'guitar';
+	return config.bassTunings.some(({ strings }) => strings.length === staff.rows.length) ? 'bass' : 'guitar';
+}
+
+function swapInstrument(state: EditorState, mode: ActiveMode, info: { staff: Staff; row: number; pos: Pos }, config: Config): ActionResult {
+	const target = defaultTuning(config, instrumentOf(info.staff, config) === 'bass' ? 'guitar' : 'bass');
+	const result = restring(info.staff, target.strings);
+	if (!result.ok) return { notice: result.problem };
+	// Stay on the same string counted from the low end, or the nearest one that still exists.
+	const count = target.strings.length;
+	const row = Math.max(0, Math.min(count - 1, info.row + count - info.staff.rows.length));
+	return editSpec(state, { ...mode, kind: 'tab', chord: null }, info.staff, [result.edit], row, info.pos, false);
 }
 
 export function applyBeats(state: EditorState, beats: number): ActionResult {
@@ -264,12 +284,22 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 		}
 		case 'clear':
 			return editSpec(state, mode, staff, [clearCell(staff, row, pos)], row, pos, false);
-		case 'clearLeft':
-			return editSpec(state, mode, staff, [clearCell(staff, row, pos)], row, posLeft(staff, pos), false);
+		case 'clearLeft': {
+			// The cursor is drawn at the start of its cell, so like a text editor, Backspace clears the cell before it.
+			const left = posLeft(staff, pos);
+			if (left.measure === pos.measure && left.beat === pos.beat) return moveTo(state, mode, staff, row, pos);
+			return editSpec(state, mode, staff, [clearCell(staff, row, left)], row, left, false);
+		}
 		case 'pickTuning': {
-			const options = config.tunings.filter(({ strings }) => strings.length === staff.rows.length);
+			const tunings = allTunings(config);
+			const options = tunings.filter(({ strings }) => strings.length === staff.rows.length);
 			if (options.length === 0) return { notice: `No configured tuning has ${staff.rows.length} strings.` };
-			return { request: { kind: 'tuning', options, current: matchTuning(staff, config.tunings)?.name ?? null } };
+			return { request: { kind: 'tuning', options, current: matchTuning(staff, tunings)?.name ?? null } };
+		}
+		case 'toggleKeys':
+			return { spec: { effects: toggleKeys.of(null) } };
+		case 'swapInstrument': {
+			return swapInstrument(state, mode, info, config);
 		}
 		case 'pickBeats':
 			return {

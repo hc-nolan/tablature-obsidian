@@ -44,6 +44,7 @@ const MOVEMENT: Record<string, Action['type']> = {
 	ArrowUp: 'prevString',
 	Escape: 'exit',
 	q: 'exit',
+	'?': 'toggleKeys',
 };
 
 const TAB_KEYS: Record<string, Action['type']> = {
@@ -54,6 +55,7 @@ const TAB_KEYS: Record<string, Action['type']> = {
 	B: 'pickBeats',
 	C: 'pickShape',
 	N: 'newStaff',
+	I: 'swapInstrument',
 };
 
 const CHORD_KEYS: Record<string, Action['type']> = {

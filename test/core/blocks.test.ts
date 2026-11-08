@@ -108,6 +108,13 @@ describe('planInsertStaff', () => {
 		expect(result.top).toBe(4);
 	});
 
+	it('starts at the top of the block from the opening fence', () => {
+		const result = applyPlan(['```tab', ...staff, '```'], 0);
+		expect(result.lines.slice(0, 3)).toEqual(['```tab', 'e|---|', 'E|---|']);
+		expect(result.top).toBe(1);
+		expect(findStaves(result.lines)).toHaveLength(2);
+	});
+
 	it('creates a new tab block outside a fence', () => {
 		const result = applyPlan(['text'], 0);
 		expect(result.lines).toEqual(['text', '```tab', 'e|---|', 'E|---|', '```']);

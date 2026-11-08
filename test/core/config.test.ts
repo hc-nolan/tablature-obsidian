@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateStaff } from '../../src/core/staff';
 import {
+	addMissingDefaults,
 	DEFAULT_CONFIG,
 	formatChords,
 	formatTunings,
@@ -103,10 +104,41 @@ describe('formatting', () => {
 	});
 });
 
+describe('addMissingDefaults', () => {
+	it('adds nothing to the defaults', () => {
+		expect(addMissingDefaults(DEFAULT_CONFIG)).toEqual({ config: DEFAULT_CONFIG, added: 0 });
+	});
+
+	it('adds missing tunings and shapes without touching existing ones', () => {
+		const old = {
+			...DEFAULT_CONFIG,
+			tunings: [{ name: 'Standard', strings: ['E', 'A', 'D', 'G', 'B', 'e'] }],
+			bassTunings: [{ name: 'Bass drop D', strings: ['C', 'G', 'C', 'F'] }],
+			chords: { default: { 'Power 5th (E root)': ['0', '2', '2', '2', 'x', 'x'] }, Mine: { Odd: ['0', '0'] } },
+		};
+		const { config, added } = addMissingDefaults(old);
+		expect(config.tunings.map((t) => t.name)).toEqual(['Standard', 'Drop D']);
+		expect(config.bassTunings).toEqual([
+			{ name: 'Bass drop D', strings: ['C', 'G', 'C', 'F'] },
+			{ name: 'Bass standard', strings: ['E', 'A', 'D', 'G'] },
+		]);
+		expect(config.chords['default']?.['Power 5th (E root)']).toEqual(['0', '2', '2', '2', 'x', 'x']);
+		expect(config.chords['default']?.['Bass octave (E root)']).toEqual(['0', 'x', '2', 'x']);
+		expect(config.chords['Mine']).toEqual({ Odd: ['0', '0'] });
+		expect(config.chords['Standard']).toEqual(DEFAULT_CONFIG.chords['Standard']);
+		expect(added).toBe(2 + Object.values(DEFAULT_CONFIG.chords).flatMap(Object.keys).length - 1);
+		expect(old.chords.default).not.toHaveProperty('Bass octave (E root)');
+	});
+});
+
 describe('mergeConfig', () => {
 	it('returns defaults for nothing saved', () => {
 		expect(mergeConfig(null)).toEqual(DEFAULT_CONFIG);
 		expect(mergeConfig('nonsense')).toEqual(DEFAULT_CONFIG);
+	});
+
+	it('keeps a saved instrument', () => {
+		expect(mergeConfig({ instrument: 'bass' }).instrument).toBe('bass');
 	});
 
 	it('keeps valid saved fields', () => {
@@ -116,11 +148,24 @@ describe('mergeConfig', () => {
 		expect(config.tunings).toEqual(DEFAULT_CONFIG.tunings);
 	});
 
+	it('fills in defaults an older install is missing', () => {
+		const config = mergeConfig({
+			tunings: [{ name: 'Standard', strings: ['E', 'A', 'D', 'G', 'B', 'e'] }],
+			bassTunings: [{ name: 'Bass drop D', strings: ['D', 'A', 'D', 'G'] }],
+			chords: { default: { 'Power 5th (E root)': ['0', '2', '2', 'x', 'x', 'x'] } },
+		});
+		expect(config.tunings.map((t) => t.name)).toEqual(['Standard', 'Drop D']);
+		expect(config.bassTunings.map((t) => t.name)).toEqual(['Bass drop D', 'Bass standard']);
+		expect(config.chords['default']?.['Bass octave (E root)']).toEqual(['0', 'x', '2', 'x']);
+	});
+
 	it('falls back per field when malformed', () => {
 		expect(mergeConfig({ beats: 'lots' }).beats).toBe(4);
 		expect(mergeConfig({ measures: 0 }).measures).toBe(4);
 		expect(mergeConfig({ tunings: [] }).tunings).toEqual(DEFAULT_CONFIG.tunings);
 		expect(mergeConfig({ tunings: [{ name: 'x' }] }).tunings).toEqual(DEFAULT_CONFIG.tunings);
+		expect(mergeConfig({ bassTunings: [] }).bassTunings).toEqual(DEFAULT_CONFIG.bassTunings);
+		expect(mergeConfig({ instrument: 'banjo' }).instrument).toBe('guitar');
 		expect(mergeConfig({ chords: 3 }).chords).toEqual(DEFAULT_CONFIG.chords);
 		expect(mergeConfig({ chords: { default: { Bad: ['z'] } } }).chords).toEqual(DEFAULT_CONFIG.chords);
 	});

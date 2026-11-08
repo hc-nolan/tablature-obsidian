@@ -39,16 +39,34 @@ describe('indicatorText', () => {
 });
 
 describe('legendText', () => {
-	it('lists the tab mode keys', () => {
-		const text = legendText(tabState(DOC, 1, 2));
-		for (const part of ['Space clear', 'T tuning', 'B beats', 'C chord', 'N new staff', 'Esc exit']) {
-			expect(text).toContain(part);
-		}
+	it('lists only the essential tab mode keys at first', () => {
+		expect(legendText(tabState(DOC, 1, 2))).toBe('Space clear · C chord · Esc exit · ? more keys');
 	});
 
-	it('shows the shape, root and chord keys', () => {
-		const text = legendText(run(chordState(), 'rootUp', config));
-		for (const part of ['Alpha', 'root 1', 'Tab next', 'Enter insert', 'Esc back']) expect(text).toContain(part);
+	it('lists every tab mode key in groups after ?', () => {
+		const text = legendText(run(tabState(DOC, 1, 2), 'toggleKeys'));
+		expect(text.split('\n')).toEqual([
+			'Edit · 0–9 fret · Space clear · ⌫ clear left',
+			'Staff · T tuning · B beats · I guitar/bass · N new staff',
+			'Mode · C chord · Esc exit · ? fewer keys',
+		]);
+	});
+
+	it('collapses again on a second ?', () => {
+		const state = run(run(tabState(DOC, 1, 2), 'toggleKeys'), 'toggleKeys');
+		expect(legendText(state)).toContain('? more keys');
+	});
+
+	it('stays expanded across tab mode sessions', () => {
+		const expanded = run(tabState(DOC, 1, 2), 'toggleKeys');
+		const again = run(run(expanded, 'exit'), 'exit');
+		expect(legendText(applyResult(again, enterAt(again, DEFAULT_CONFIG)))).toContain('? fewer keys');
+	});
+
+	it('shows the shape and root above the chord keys', () => {
+		const state = run(chordState(), 'rootUp', config);
+		expect(legendText(state)).toBe('Alpha · root 1\nTab next · Enter insert · Esc back · ? more keys');
+		expect(legendText(run(state, 'toggleKeys', config))).toContain('Root · + up · - down');
 	});
 });
 
@@ -127,11 +145,12 @@ describe('in an editor that is already open', () => {
 	let view: EditorView;
 
 	beforeEach(() => {
-		vi.stubGlobal('createEl', (tag: string, info: { text: string }) => {
+		vi.stubGlobal('createEl', (tag: string, info: { text?: string }) => {
 			const element = document.createElement(tag);
-			element.textContent = info.text;
+			element.textContent = info.text ?? '';
 			return element;
 		});
+		vi.stubGlobal('createDiv', () => document.createElement('div'));
 		const state = EditorState.create({ doc: DOC.join('\n'), selection: { anchor: 9 } });
 		view = new EditorView({ state, parent: document.body });
 	});

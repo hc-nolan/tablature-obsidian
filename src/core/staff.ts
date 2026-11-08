@@ -88,7 +88,7 @@ export function clampPos(staff: Staff, pos: Pos): Pos {
 	return { measure, beat: Math.max(0, Math.min(beats - 1, pos.beat)) };
 }
 
-/** A replacement within one document row. `insert` may contain newlines. */
+/** A replacement starting in one document row. `insert` may contain newlines, and `to` may run past the row's end. */
 export interface LineEdit {
 	row: number;
 	from: number;
@@ -143,6 +143,34 @@ export function relabel(staff: Staff, labelsLowToHigh: string[]): LineEdit[] {
 		to: labelEnd,
 		insert: (labelsLowToHigh[staff.rows.length - 1 - i] as string).padEnd(width, ' '),
 	}));
+}
+
+export type RestringResult = { ok: true; edit: LineEdit } | { ok: false; problem: string };
+
+/**
+ * Relabels a staff with a tuning that may have a different string count. The low strings are kept in place:
+ * extra high strings are added as blank rows at the top, and surplus high strings are removed from the top,
+ * which is refused if any of them has notes.
+ */
+export function restring(staff: Staff, labelsLowToHigh: string[]): RestringResult {
+	const labelEnd = (staff.rows[0] as string).indexOf('|');
+	const surplus = staff.rows.length - labelsLowToHigh.length;
+	const removed = staff.rows.slice(0, Math.max(0, surplus));
+	const noted = removed.findIndex((row) => /[^|\s-]/.test(row.slice(labelEnd)));
+	if (noted >= 0) {
+		const label = staff.labels[noted] as string;
+		return { ok: false, problem: `The ${label} string has notes on it. Clear them first, then switch instruments.` };
+	}
+
+	const blank = (staff.rows[0] as string).slice(labelEnd).replace(/[^|\s]/g, FILLER);
+	const bodies = [
+		...Array.from({ length: Math.max(0, -surplus) }, () => blank),
+		...staff.rows.slice(Math.max(0, surplus)).map((row) => row.slice(labelEnd)),
+	];
+	const width = Math.max(...labelsLowToHigh.map((label) => label.length));
+	const highToLow = [...labelsLowToHigh].reverse();
+	const insert = bodies.map((body, i) => (highToLow[i] as string).padEnd(width, ' ') + body).join('\n');
+	return { ok: true, edit: { row: staff.top, from: 0, to: staff.rows.join('\n').length, insert } };
 }
 
 export function generateStaff(labelsLowToHigh: string[], measures: number, beats: number): string[] {

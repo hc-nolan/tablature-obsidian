@@ -30,4 +30,9 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		// Tests run in jsdom and stub Obsidian's DOM helpers, so the plugin's runtime DOM rules don't apply.
+		files: ['test/**/*.ts'],
+		rules: { 'obsidianmd/prefer-create-el': 'off' },
+	},
 );
