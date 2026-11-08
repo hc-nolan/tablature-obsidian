@@ -1,7 +1,8 @@
 // The settings tab. Invalid input shows an inline error and is never saved, so the last valid value stays in use.
 
-import { type App, type Plugin, PluginSettingTab, type Setting, type SettingDefinitionItem } from 'obsidian';
+import { type App, Notice, type Plugin, PluginSettingTab, type Setting, type SettingDefinitionItem } from 'obsidian';
 import {
+	addMissingDefaults,
 	type Config,
 	DEFAULT_CONFIG,
 	formatChords,
@@ -29,13 +30,22 @@ export class TablatureSettingTab extends PluginSettingTab {
 		return [
 			this.numberItem('Default beats per measure', 'Used for new staves.', 'beats'),
 			this.numberItem('Default measures per staff', 'Used for new staves.', 'measures'),
+			this.instrumentItem(),
 			this.textItem(
-				'Tunings',
-				'One per line, low to high: name | E A D G B e. The first is the default for new staves.',
+				'Guitar tunings',
+				'One per line, low to high: name | E A D G B e. The first is the default for new guitar staves.',
 				() => formatTunings(this.host.config.tunings),
 				parseTunings,
 				(tunings) => (this.host.config.tunings = tunings),
 				() => (this.host.config.tunings = DEFAULT_CONFIG.tunings),
+			),
+			this.textItem(
+				'Bass tunings',
+				'One per line, low to high: name | E A D G. The first is the default for new bass staves.',
+				() => formatTunings(this.host.config.bassTunings),
+				parseTunings,
+				(tunings) => (this.host.config.bassTunings = tunings),
+				() => (this.host.config.bassTunings = DEFAULT_CONFIG.bassTunings),
 			),
 			this.textItem(
 				'Chord shapes',
@@ -45,7 +55,54 @@ export class TablatureSettingTab extends PluginSettingTab {
 				(chords) => (this.host.config.chords = chords),
 				() => (this.host.config.chords = DEFAULT_CONFIG.chords),
 			),
+			this.addDefaultsItem(),
 		];
+	}
+
+	private instrumentItem(): SettingDefinitionItem {
+		const name = 'New staves use';
+		const desc = 'The instrument for a staff inserted outside an existing one. Press I in tab mode to switch a staff.';
+		return {
+			name,
+			desc,
+			render: (setting) => {
+				setting.setName(name).setDesc(desc);
+				setting.addDropdown((dropdown) =>
+					dropdown
+						.addOptions({ guitar: 'Guitar', bass: 'Bass' })
+						.setValue(this.host.config.instrument)
+						.onChange(async (value) => {
+							this.host.config.instrument = value === 'bass' ? 'bass' : 'guitar';
+							await this.host.saveConfig();
+						}),
+				);
+			},
+		};
+	}
+
+	private addDefaultsItem(): SettingDefinitionItem {
+		const name = 'Add missing defaults';
+		const desc = "Adds any built-in tuning or chord shape you don't have, such as ones added in an update. Yours stay as they are.";
+		return {
+			name,
+			desc,
+			render: (setting) => {
+				setting.setName(name).setDesc(desc);
+				setting.addButton((button) =>
+					button.setButtonText('Add').onClick(async () => {
+						const { config, added } = addMissingDefaults(this.host.config);
+						if (added === 0) {
+							new Notice('You already have every built-in tuning and chord shape.');
+							return;
+						}
+						this.host.config = config;
+						await this.host.saveConfig();
+						new Notice(`Added ${added} tunings and chord shapes.`);
+						this.update();
+					}),
+				);
+			},
+		};
 	}
 
 	private numberItem(name: string, desc: string, key: 'beats' | 'measures'): SettingDefinitionItem {

@@ -3,9 +3,9 @@
 import { type EditorState, type Extension, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { applyRoot, matchTuning } from '../core/chords';
-import type { Config, Shape } from '../core/config';
+import { allTunings, type Config, type Shape } from '../core/config';
 import { BEAT_WIDTH, type Measure, posToCol, type Pos, type Staff } from '../core/staff';
-import { currentStaff, modeField } from './mode';
+import { currentStaff, keysExpanded, modeField } from './mode';
 
 const FILLER = '-';
 const CELL_CONTENT_WIDTH = 2;
@@ -33,14 +33,87 @@ export function indicatorText(staff: Staff, pos: Pos, tuningName: string): strin
 	return `m:${pos.measure + 1} b:${pos.beat + 1}/${beats} · ${tuningName}`;
 }
 
-export function legendText(state: EditorState): string {
+/** A key and what it does. */
+export type KeyHint = [key: string, label: string];
+
+export interface LegendRow {
+	/** A group name such as "Edit", or null for an ungrouped row. */
+	group: string | null;
+	keys: KeyHint[];
+}
+
+export interface Legend {
+	/** Chord mode's shape and root. */
+	status: string | null;
+	rows: LegendRow[];
+}
+
+const MORE: KeyHint = ['?', 'more keys'];
+const FEWER: KeyHint = ['?', 'fewer keys'];
+
+const TAB_ESSENTIALS: KeyHint[] = [['Space', 'clear'], ['C', 'chord'], ['Esc', 'exit'], MORE];
+const TAB_ALL: LegendRow[] = [
+	{ group: 'Edit', keys: [['0–9', 'fret'], ['Space', 'clear'], ['⌫', 'clear left']] },
+	{ group: 'Staff', keys: [['T', 'tuning'], ['B', 'beats'], ['I', 'guitar/bass'], ['N', 'new staff']] },
+	{ group: 'Mode', keys: [['C', 'chord'], ['Esc', 'exit'], FEWER] },
+];
+
+const CHORD_ESSENTIALS: KeyHint[] = [['Tab', 'next'], ['Enter', 'insert'], ['Esc', 'back'], MORE];
+const CHORD_ALL: LegendRow[] = [
+	{ group: 'Shape', keys: [['Tab', 'next'], ['⇧Tab', 'previous'], ['C', 'pick']] },
+	{ group: 'Root', keys: [['+', 'up'], ['-', 'down']] },
+	{ group: 'Mode', keys: [['Enter', 'insert'], ['Esc', 'back'], FEWER] },
+];
+
+export function legend(state: EditorState): Legend {
 	const mode = state.field(modeField);
-	if (mode.kind === 'off') return '';
+	if (mode.kind === 'off') return { status: null, rows: [] };
+	const all = keysExpanded(state);
 	if (mode.chord) {
 		const name = mode.chord.names[mode.chord.index] as string;
-		return `${name} · root ${mode.chord.root} · Tab next · +/- root · Enter insert · C pick · Esc back`;
+		const status = `${name} · root ${mode.chord.root}`;
+		return { status, rows: all ? CHORD_ALL : [{ group: null, keys: CHORD_ESSENTIALS }] };
 	}
-	return 'Space clear · T tuning · B beats · C chord · N new staff · Esc exit';
+	return { status: null, rows: all ? TAB_ALL : [{ group: null, keys: TAB_ESSENTIALS }] };
+}
+
+/** The legend as plain text, one line per row. */
+export function legendText(state: EditorState): string {
+	const { status, rows } = legend(state);
+	const lines = rows.map(({ group, keys }) =>
+		[group, ...keys.map(([key, label]) => `${key} ${label}`)].filter(Boolean).join(' · '),
+	);
+	return [status, ...lines].filter(Boolean).join('\n');
+}
+
+class LegendWidget extends WidgetType {
+	constructor(
+		readonly value: Legend,
+		readonly text: string,
+	) {
+		super();
+	}
+
+	eq(other: LegendWidget): boolean {
+		return other.text === this.text;
+	}
+
+	toDOM(): HTMLElement {
+		const add = <K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls?: string, text?: string) =>
+			parent.appendChild(createEl(tag, { cls, text }));
+		const root = createDiv({ cls: 'tablature-legend' });
+		if (this.value.status) add(root, 'div', 'tablature-legend-status', this.value.status);
+		for (const { group, keys } of this.value.rows) {
+			const row = add(root, 'div', 'tablature-legend-row');
+			if (group) add(row, 'span', 'tablature-legend-group', group);
+			for (const [key, label] of keys) {
+				const hint = add(row, 'span', 'tablature-legend-hint');
+				add(hint, 'kbd', undefined, key);
+				add(hint, 'span', undefined, label);
+			}
+		}
+		return root;
+	}
 }
 
 export function buildDecorations(state: EditorState, config: Config): DecorationSet {
@@ -51,7 +124,7 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 	const measure = staff.measures[pos.measure] as Measure;
 	const rowFrom = (row: number): number => state.doc.line(staff.top + row + 1).from;
 	const count = staff.rows.length;
-	const tuningName = matchTuning(staff, config.tunings)?.name ?? 'Custom';
+	const tuningName = matchTuning(staff, allTunings(config))?.name ?? 'Custom';
 	const ranges = [];
 
 	ranges.push(
@@ -87,7 +160,7 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 
 	ranges.push(
 		Decoration.widget({
-			widget: new TextWidget(legendText(state), 'tablature-legend', 'div'),
+			widget: new LegendWidget(legend(state), legendText(state)),
 			block: true,
 			side: 1,
 		}).range(state.doc.line(staff.top + count).to),
@@ -100,7 +173,10 @@ export function decorationsExtension(getConfig: () => Config): Extension {
 	return StateField.define<DecorationSet>({
 		create: (state) => buildDecorations(state, getConfig()),
 		update: (value, tr) =>
-			tr.docChanged || tr.selection || tr.startState.field(modeField, false) !== tr.state.field(modeField)
+			tr.docChanged ||
+			tr.selection ||
+			tr.startState.field(modeField, false) !== tr.state.field(modeField) ||
+			keysExpanded(tr.startState) !== keysExpanded(tr.state)
 				? buildDecorations(tr.state, getConfig())
 				: value,
 		provide: (field) => EditorView.decorations.from(field),

@@ -59,7 +59,15 @@ describe('availableShapes', () => {
 
 	it('filters to the string count', () => {
 		const fourString = parsed(generateStaff(['E', 'A', 'D', 'G'], 1, 1));
-		expect(availableShapes(fourString, DEFAULT_CONFIG)).toEqual({});
+		const names = Object.keys(availableShapes(fourString, DEFAULT_CONFIG));
+		expect(names.length).toBeGreaterThan(0);
+		expect(names.every((name) => name.startsWith('Bass'))).toBe(true);
+	});
+
+	it('matches bass tunings for tuning-scoped shapes', () => {
+		const bass = parsed(generateStaff(['E', 'A', 'D', 'G'], 1, 1));
+		const config = { ...DEFAULT_CONFIG, chords: { 'Bass standard': { Octave: ['0', 'x', '2', 'x'] } } };
+		expect(availableShapes(bass, config)).toEqual({ Octave: ['0', 'x', '2', 'x'] });
 	});
 
 	it('uses only default shapes on an unknown tuning', () => {

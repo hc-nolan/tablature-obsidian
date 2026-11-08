@@ -1,6 +1,6 @@
 // Tuning matching and chord voicings. Pure: no editor or Obsidian dependencies.
 
-import type { Config, Shape, Tuning } from './config';
+import { allTunings, type Config, type Shape, type Tuning } from './config';
 import { cellEdit, type LineEdit, type Pos, type Staff, staffLabelsLowToHigh } from './staff';
 
 const MAX_FRET = 99;
@@ -15,7 +15,7 @@ export function matchTuning(staff: Staff, tunings: Tuning[]): Tuning | null {
 }
 
 export function availableShapes(staff: Staff, config: Config): Record<string, Shape> {
-	const tuning = matchTuning(staff, config.tunings);
+	const tuning = matchTuning(staff, allTunings(config));
 	const merged = { ...config.chords['default'], ...(tuning ? config.chords[tuning.name] : undefined) };
 	return Object.fromEntries(Object.entries(merged).filter(([, shape]) => shape.length === staff.rows.length));
 }

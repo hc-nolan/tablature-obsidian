@@ -3,7 +3,7 @@
   "name": "Tablature",
   "version": "0.1.1",
   "minAppVersion": "1.15.0",
-  "description": "Write and edit guitar tabs from the keyboard, in fenced code blocks.",
+  "description": "Write and edit guitar and bass tabs from the keyboard, in fenced code blocks.",
   "author": "hc-nolan",
   "authorUrl": "https://github.com/hc-nolan",
   "isDesktopOnly": true

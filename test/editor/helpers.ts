@@ -2,7 +2,7 @@ import { history, undo } from '@codemirror/commands';
 import { EditorState } from '@codemirror/state';
 import { type Action, type ActionResult, applyAction, enterAt } from '../../src/editor/actions';
 import { DEFAULT_CONFIG, type Config } from '../../src/core/config';
-import { modeField, selectionFilter } from '../../src/editor/mode';
+import { keysExpandedField, modeField, selectionFilter } from '../../src/editor/mode';
 
 export const STAFF = ['e|------|------|', 'B|------|------|'];
 export const DOC = ['```tab', ...STAFF, '```'];
@@ -10,7 +10,7 @@ export const DOC = ['```tab', ...STAFF, '```'];
 export function makeState(lines: string[], row: number, col: number): EditorState {
 	const state = EditorState.create({
 		doc: lines.join('\n'),
-		extensions: [modeField, selectionFilter, history(), EditorState.allowMultipleSelections.of(true)],
+		extensions: [modeField, keysExpandedField, selectionFilter, history(), EditorState.allowMultipleSelections.of(true)],
 	});
 	return state.update({ selection: { anchor: state.doc.line(row + 1).from + col } }).state;
 }

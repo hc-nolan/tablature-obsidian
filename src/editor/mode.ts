@@ -32,6 +32,18 @@ export const OFF: ModeState = { kind: 'off', notice: null };
 /** The value is expressed in the coordinates of the document after the transaction. */
 export const setMode = StateEffect.define<ModeState>();
 
+export const toggleKeys = StateEffect.define<null>();
+
+/** Whether the legend lists every key or only the essentials. Kept per editor across tab mode sessions. */
+export const keysExpandedField = StateField.define<boolean>({
+	create: () => false,
+	update: (value, tr) => tr.effects.reduce((open, effect) => (effect.is(toggleKeys) ? !open : open), value),
+});
+
+export function keysExpanded(state: EditorState): boolean {
+	return state.field(keysExpandedField, false) ?? false;
+}
+
 const STAFF_GONE = 'The staff you were editing is gone, so tab mode has exited.';
 const CURSOR_LEFT = 'That change moved the cursor off the staff, so tab mode has exited.';
 

@@ -10,6 +10,7 @@ import {
 	parseStaff,
 	posToCol,
 	relabel,
+	restring,
 	setMeasureBeats,
 	type Staff,
 	staffLabelsLowToHigh,
@@ -243,6 +244,46 @@ describe('relabel', () => {
 	it('narrows padding when the new labels are shorter', () => {
 		const rows = ['e |---|', 'C#|---|'];
 		expect(apply(rows, relabel(parsed(rows), ['E', 'e']))).toEqual(['e|---|', 'E|---|']);
+	});
+});
+
+describe('restring', () => {
+	const BLANK = '|------|';
+	const guitar = ['e', 'B', 'G', 'D', 'A', 'E'].map((l) => l + BLANK);
+	const restrung = (rows: string[], labels: string[]): string[] => {
+		const result = restring(parsed(rows), labels);
+		if (!result.ok) throw new Error(result.problem);
+		const text = rows.join('\n');
+		const { from, to, insert } = result.edit;
+		return (text.slice(0, from) + insert + text.slice(to)).split('\n');
+	};
+
+	it('drops the high strings going to bass, keeping notes on the low ones', () => {
+		const rows = [...guitar.slice(0, 5), 'E|3--5--|'];
+		expect(restrung(rows, ['E', 'A', 'D', 'G'])).toEqual(['G|------|', 'D|------|', 'A|------|', 'E|3--5--|']);
+	});
+
+	it('adds blank high strings going to guitar, matching the bar layout', () => {
+		const rows = ['G|---|------|', 'D|---|------|', 'A|---|------|', 'E|3--|------|'];
+		expect(restrung(rows, ['E', 'A', 'D', 'G', 'B', 'e'])).toEqual([
+			'e|---|------|',
+			'B|---|------|',
+			'G|---|------|',
+			'D|---|------|',
+			'A|---|------|',
+			'E|3--|------|',
+		]);
+	});
+
+	it('refuses to drop a string with notes', () => {
+		const rows = ['e|-7----|', ...guitar.slice(1)];
+		const result = restring(parsed(rows), ['E', 'A', 'D', 'G']);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.problem).toMatch(/e string/);
+	});
+
+	it('pads labels to the widest new label', () => {
+		expect(restrung(['G|---|', 'D|---|'], ['C#', 'e', 'B'])).toEqual(['B |---|', 'e |---|', 'C#|---|']);
 	});
 });
 
