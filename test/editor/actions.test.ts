@@ -29,6 +29,14 @@ describe('enterAt', () => {
 		expect(result.spec).toBeUndefined();
 	});
 
+	it('inserts a staff at the cursor inside an existing tab block', () => {
+		const doc = ['```tab', 'Verse', ...STAFF, '```'];
+		const state = applyResult(makeState(doc, 1, 0), enterAt(makeState(doc, 1, 0), DEFAULT_CONFIG));
+		expect(state.field(modeField).kind).toBe('tab');
+		// A guitar staff by default, plus the 2 existing rows.
+		expect(lines(state).filter((line) => line.includes('|'))).toHaveLength(8);
+	});
+
 	it('names the problem on an invalid staff', () => {
 		const result = enterAt(makeState(['```', 'e|---|', 'B|----|', '```'], 1, 0), DEFAULT_CONFIG);
 		expect(result.notice).toMatch(/line up/);
@@ -463,8 +471,8 @@ describe('insertStaff above an existing staff', () => {
 		expect(lines(digits(state, '7'))[4]).toMatch(/^e\|7-/);
 	});
 
-	it('separates the new staff from one directly after the opening fence', () => {
+	it('puts the new staff directly below the opening fence and separates it from the existing one', () => {
 		const state = run(makeState(DOC, 0, 0), 'newStaff', sameLayout);
-		expect(lines(state)).toEqual(['```tab', '', '', ...STAFF, '', '', ...STAFF, '```']);
+		expect(lines(state)).toEqual(['```tab', ...STAFF, '', '', ...STAFF, '```']);
 	});
 });

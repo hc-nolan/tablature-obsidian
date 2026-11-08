@@ -197,7 +197,7 @@ function validChords(value: unknown): ChordLibrary | null {
 
 export function mergeConfig(saved: unknown): Config {
 	const data = asRecord(saved) ?? {};
-	return {
+	const config: Config = {
 		beats: isPositiveInt(data['beats']) ? data['beats'] : DEFAULT_CONFIG.beats,
 		measures: isPositiveInt(data['measures']) ? data['measures'] : DEFAULT_CONFIG.measures,
 		instrument: data['instrument'] === 'bass' ? 'bass' : 'guitar',
@@ -205,6 +205,8 @@ export function mergeConfig(saved: unknown): Config {
 		bassTunings: validTunings(data['bassTunings']) ?? DEFAULT_CONFIG.bassTunings,
 		chords: validChords(data['chords']) ?? DEFAULT_CONFIG.chords,
 	};
+	// Built-in tunings and shapes are always available, including ones added in an update. User entries are kept.
+	return addMissingDefaults(config).config;
 }
 
 export function allTunings(config: Config): Tuning[] {
@@ -213,18 +215,22 @@ export function allTunings(config: Config): Tuning[] {
 
 /** The default tuning for new staves of an instrument: the first in its list. */
 export function defaultTuning(config: Config, instrument: Instrument): Tuning {
-	return (instrument === 'bass' ? config.bassTunings[0] : config.tunings[0]) as Tuning;
+	const list = instrument === 'bass' ? config.bassTunings : config.tunings;
+	const fallback = instrument === 'bass' ? DEFAULT_CONFIG.bassTunings : DEFAULT_CONFIG.tunings;
+	return (list[0] ?? fallback[0]) as Tuning;
 }
 
 /**
  * Adds every default tuning and chord shape whose name isn't already in use, so an install whose settings predate
- * new defaults can pick them up. Existing entries are never changed.
+ * new defaults still has them. Existing entries are never changed. `mergeConfig` runs this on load, so the plugin
+ * always has the built-ins; the settings screens also show them.
  */
 export function addMissingDefaults(config: Config): { config: Config; added: number } {
 	let added = 0;
 	const names = new Set(allTunings(config).map(({ name }) => name));
 	const missing = (defaults: Tuning[]): Tuning[] => {
 		const extra = defaults.filter(({ name }) => !names.has(name));
+		for (const { name } of extra) names.add(name);
 		added += extra.length;
 		return extra;
 	};

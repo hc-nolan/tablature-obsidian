@@ -148,6 +148,17 @@ describe('mergeConfig', () => {
 		expect(config.tunings).toEqual(DEFAULT_CONFIG.tunings);
 	});
 
+	it('fills in defaults an older install is missing', () => {
+		const config = mergeConfig({
+			tunings: [{ name: 'Standard', strings: ['E', 'A', 'D', 'G', 'B', 'e'] }],
+			bassTunings: [{ name: 'Bass drop D', strings: ['D', 'A', 'D', 'G'] }],
+			chords: { default: { 'Power 5th (E root)': ['0', '2', '2', 'x', 'x', 'x'] } },
+		});
+		expect(config.tunings.map((t) => t.name)).toEqual(['Standard', 'Drop D']);
+		expect(config.bassTunings.map((t) => t.name)).toEqual(['Bass drop D', 'Bass standard']);
+		expect(config.chords['default']?.['Bass octave (E root)']).toEqual(['0', 'x', '2', 'x']);
+	});
+
 	it('falls back per field when malformed', () => {
 		expect(mergeConfig({ beats: 'lots' }).beats).toBe(4);
 		expect(mergeConfig({ measures: 0 }).measures).toBe(4);

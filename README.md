@@ -81,7 +81,8 @@ A preview of the chord follows the cursor until you write it.
 - **New staves use** sets whether a staff inserted from scratch is for guitar or bass. Inserting next to an existing
   staff copies its tuning instead.
 - **Guitar tunings** and **Bass tunings** have one tuning per line, low string to high. The first in each list is the
-  default for new staves of that instrument:
+  default for new staves of that instrument. Built-in defaults are always included, so ones added by an update appear
+  without changing your own entries:
 
   ```
   Drop D | D A D G B e
@@ -95,9 +96,6 @@ A preview of the chord follows the cursor until you write it.
   Standard | Major (E shape) | 0 2 2 1 0 0
   default | Bass octave (E root) | 0 x 2 x
   ```
-
-- **Add missing defaults** adds any built-in tuning or chord shape you don't have, such as ones added in an update,
-  without changing your own.
 
 ## Install manually
 

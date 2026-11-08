@@ -145,9 +145,9 @@ describe('in an editor that is already open', () => {
 	let view: EditorView;
 
 	beforeEach(() => {
-		vi.stubGlobal('createEl', (tag: string, info: { text: string }) => {
+		vi.stubGlobal('createEl', (tag: string, info: { text?: string }) => {
 			const element = document.createElement(tag);
-			element.textContent = info.text;
+			element.textContent = info.text ?? '';
 			return element;
 		});
 		vi.stubGlobal('createDiv', () => document.createElement('div'));

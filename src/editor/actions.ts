@@ -185,8 +185,7 @@ export function enterAt(state: EditorState, config: Config): ActionResult {
 	};
 	const entered = state.update({ effects: setMode.of(mode), selection: EditorSelection.single(head) }).state;
 	const info = currentStaff(entered);
-	if (!info) return { notice: 'Put the cursor on a tab staff inside a code block first.' };
-	return moveTo(state, mode, info.staff, info.row, info.pos);
+	return info ? moveTo(state, mode, info.staff, info.row, info.pos) : {};
 }
 
 export function insertStaff(state: EditorState, config: Config): ActionResult {
@@ -288,7 +287,7 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 		case 'clearLeft': {
 			// The cursor is drawn at the start of its cell, so like a text editor, Backspace clears the cell before it.
 			const left = posLeft(staff, pos);
-			if (left === pos) return moveTo(state, mode, staff, row, pos);
+			if (left.measure === pos.measure && left.beat === pos.beat) return moveTo(state, mode, staff, row, pos);
 			return editSpec(state, mode, staff, [clearCell(staff, row, left)], row, left, false);
 		}
 		case 'pickTuning': {

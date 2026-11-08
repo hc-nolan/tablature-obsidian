@@ -77,25 +77,28 @@ export function legend(state: EditorState): Legend {
 	return { status: null, rows: all ? TAB_ALL : [{ group: null, keys: TAB_ESSENTIALS }] };
 }
 
-/** The legend as plain text, one line per row. */
-export function legendText(state: EditorState): string {
-	const { status, rows } = legend(state);
+function legendLines({ status, rows }: Legend): string {
 	const lines = rows.map(({ group, keys }) =>
 		[group, ...keys.map(([key, label]) => `${key} ${label}`)].filter(Boolean).join(' · '),
 	);
 	return [status, ...lines].filter(Boolean).join('\n');
 }
 
+/** The legend as plain text, one line per row. */
+export function legendText(state: EditorState): string {
+	return legendLines(legend(state));
+}
+
 class LegendWidget extends WidgetType {
-	constructor(
-		readonly value: Legend,
-		readonly text: string,
-	) {
+	readonly text: string;
+
+	constructor(readonly value: Legend) {
 		super();
+		this.text = legendLines(value);
 	}
 
 	eq(other: LegendWidget): boolean {
-		return other.text === this.text;
+		return JSON.stringify(other.value) === JSON.stringify(this.value);
 	}
 
 	toDOM(): HTMLElement {
@@ -160,7 +163,7 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 
 	ranges.push(
 		Decoration.widget({
-			widget: new LegendWidget(legend(state), legendText(state)),
+			widget: new LegendWidget(legend(state)),
 			block: true,
 			side: 1,
 		}).range(state.doc.line(staff.top + count).to),

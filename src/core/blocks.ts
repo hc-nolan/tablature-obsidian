@@ -98,6 +98,8 @@ export function planInsertStaff(
 		const afterRow = current ? current.top + current.height - 1 : row;
 		// Without a gap, a staff on the next line would merge with the new one.
 		const gap = isStaffLine(lines[afterRow + 1] ?? '') ? '\n\n' : '';
+		// A cursor on the opening fence is the top of the block, so the staff starts right below the fence.
+		if (!current && row === block.open) return appendAfter(afterRow, `\n${staffLines}${gap}`, afterRow + 1);
 		return appendAfter(afterRow, `\n\n\n${staffLines}${gap}`, afterRow + 3);
 	}
 

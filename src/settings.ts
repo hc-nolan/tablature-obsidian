@@ -1,8 +1,7 @@
 // The settings tab. Invalid input shows an inline error and is never saved, so the last valid value stays in use.
 
-import { type App, Notice, type Plugin, PluginSettingTab, type Setting, type SettingDefinitionItem } from 'obsidian';
+import { type App, type Plugin, PluginSettingTab, type Setting, type SettingDefinitionItem } from 'obsidian';
 import {
-	addMissingDefaults,
 	type Config,
 	DEFAULT_CONFIG,
 	formatChords,
@@ -55,7 +54,6 @@ export class TablatureSettingTab extends PluginSettingTab {
 				(chords) => (this.host.config.chords = chords),
 				() => (this.host.config.chords = DEFAULT_CONFIG.chords),
 			),
-			this.addDefaultsItem(),
 		];
 	}
 
@@ -76,31 +74,7 @@ export class TablatureSettingTab extends PluginSettingTab {
 							await this.host.saveConfig();
 						}),
 				);
-			},
-		};
-	}
-
-	private addDefaultsItem(): SettingDefinitionItem {
-		const name = 'Add missing defaults';
-		const desc = "Adds any built-in tuning or chord shape you don't have, such as ones added in an update. Yours stay as they are.";
-		return {
-			name,
-			desc,
-			render: (setting) => {
-				setting.setName(name).setDesc(desc);
-				setting.addButton((button) =>
-					button.setButtonText('Add').onClick(async () => {
-						const { config, added } = addMissingDefaults(this.host.config);
-						if (added === 0) {
-							new Notice('You already have every built-in tuning and chord shape.');
-							return;
-						}
-						this.host.config = config;
-						await this.host.saveConfig();
-						new Notice(`Added ${added} tunings and chord shapes.`);
-						this.update();
-					}),
-				);
+				this.addReset(setting, () => (this.host.config.instrument = DEFAULT_CONFIG.instrument));
 			},
 		};
 	}
