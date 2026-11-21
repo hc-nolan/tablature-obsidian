@@ -37,7 +37,6 @@ class ChoiceModal<T> extends SuggestModal<T> {
 class BeatsModal extends Modal {
 	constructor(
 		app: App,
-		private readonly measure: number,
 		private readonly current: number,
 		private readonly resolve: (beats: number | null) => void,
 	) {
@@ -45,7 +44,7 @@ class BeatsModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(`Beats in measure ${this.measure + 1}`);
+		this.setTitle('Beats per measure');
 		let value = String(this.current);
 		const submit = (): void => {
 			const beats = parseBeatCount(value);
@@ -87,6 +86,6 @@ export function pickShape(app: App, names: string[]): Promise<string | null> {
 	return new Promise((resolve) => new ChoiceModal(app, names, (name) => name, resolve).open());
 }
 
-export function promptBeats(app: App, measure: number, current: number): Promise<number | null> {
-	return new Promise((resolve) => new BeatsModal(app, measure, current, resolve).open());
+export function promptBeats(app: App, current: number): Promise<number | null> {
+	return new Promise((resolve) => new BeatsModal(app, current, resolve).open());
 }

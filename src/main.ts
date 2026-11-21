@@ -25,7 +25,7 @@ export default class TablaturePlugin extends Plugin {
 			getConfig: () => this.config,
 			pickTuning: (options, current) => pickTuning(this.app, options, current),
 			pickShape: (names) => pickShape(this.app, names),
-			promptBeats: (measure, current) => promptBeats(this.app, measure, current),
+			promptBeats: (current) => promptBeats(this.app, current),
 			notify: (message) => new Notice(message),
 			isMac: Platform.isMacOS,
 		};
