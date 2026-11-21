@@ -24,7 +24,7 @@ export interface EditorDeps {
 	getConfig(): Config;
 	pickTuning(options: Tuning[], current: string | null): Promise<Tuning | null>;
 	pickShape(names: string[]): Promise<string | null>;
-	promptBeats(measure: number, current: number): Promise<number | null>;
+	promptBeats(current: number): Promise<number | null>;
 	notify(message: string): void;
 	isMac: boolean;
 }
@@ -105,7 +105,7 @@ async function runRequest(view: EditorView, request: PickerRequest, deps: Editor
 			const tuning = await deps.pickTuning(request.options, request.current);
 			if (tuning) followUp = (state) => applyTuning(state, tuning);
 		} else if (request.kind === 'beats') {
-			const beats = await deps.promptBeats(request.measure, request.current);
+			const beats = await deps.promptBeats(request.current);
 			if (beats !== null) followUp = (state) => applyBeats(state, beats);
 		} else {
 			const name = await deps.pickShape(request.names);

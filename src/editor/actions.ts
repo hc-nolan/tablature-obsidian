@@ -15,7 +15,7 @@ import {
 	type Pos,
 	relabel,
 	restring,
-	setMeasureBeats,
+	setStaffBeats,
 	type Staff,
 	staffLabelsLowToHigh,
 	writeFret,
@@ -56,7 +56,7 @@ export type Action =
 
 export type PickerRequest =
 	| { kind: 'tuning'; options: Tuning[]; current: string | null }
-	| { kind: 'beats'; measure: number; current: number }
+	| { kind: 'beats'; current: number }
 	| { kind: 'shape'; names: string[] };
 
 export interface ActionResult {
@@ -238,7 +238,7 @@ export function applyBeats(state: EditorState, beats: number): ActionResult {
 	const mode = state.field(modeField);
 	const info = currentStaff(state);
 	if (mode.kind === 'off' || !info) return {};
-	const edits = setMeasureBeats(info.staff, info.pos.measure, beats);
+	const edits = setStaffBeats(info.staff, beats);
 	return editSpec(state, mode, info.staff, edits, info.row, info.pos, false);
 }
 
@@ -303,7 +303,7 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 		}
 		case 'pickBeats':
 			return {
-				request: { kind: 'beats', measure: pos.measure, current: (staff.measures[pos.measure] as Measure).beats },
+				request: { kind: 'beats', current: (staff.measures[pos.measure] as Measure).beats },
 			};
 		case 'pickShape': {
 			const names = Object.keys(availableShapes(staff, config)).sort();

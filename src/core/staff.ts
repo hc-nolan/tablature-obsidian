@@ -123,15 +123,20 @@ export function clearCell(staff: Staff, stringRow: number, pos: Pos): LineEdit {
 	return cellEdit(staff, stringRow, pos, '');
 }
 
-export function setMeasureBeats(staff: Staff, measure: number, beats: number): LineEdit[] {
-	const target = staff.measures[measure] as Measure;
-	if (beats === target.beats) return [];
-	const oldEnd = target.start + target.beats * BEAT_WIDTH;
-	return staff.rows.map((_, i) =>
-		beats > target.beats
-			? { row: staff.top + i, from: oldEnd, to: oldEnd, insert: FILLER.repeat((beats - target.beats) * BEAT_WIDTH) }
-			: { row: staff.top + i, from: target.start + beats * BEAT_WIDTH, to: oldEnd, insert: '' },
-	);
+/** Resizes every measure of the staff to `beats`, padding with filler or dropping trailing beats. */
+export function setStaffBeats(staff: Staff, beats: number): LineEdit[] {
+	if (staff.measures.every((measure) => measure.beats === beats)) return [];
+	const first = staff.measures[0] as Measure;
+	const last = staff.measures[staff.measures.length - 1] as Measure;
+	const width = beats * BEAT_WIDTH;
+	return staff.rows.map((row, i) => ({
+		row: staff.top + i,
+		from: first.start,
+		to: last.start + last.beats * BEAT_WIDTH,
+		insert: staff.measures
+			.map(({ start, beats: old }) => row.slice(start, start + Math.min(old * BEAT_WIDTH, width)).padEnd(width, FILLER))
+			.join('|'),
+	}));
 }
 
 export function relabel(staff: Staff, labelsLowToHigh: string[]): LineEdit[] {

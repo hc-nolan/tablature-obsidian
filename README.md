@@ -48,7 +48,7 @@ E|------------|------------|
 | `Space` | Clear the cell |
 | `Backspace` | Clear the previous cell and move onto it |
 | `T` | Change the staff's tuning |
-| `B` | Set the number of beats in the current measure |
+| `B` | Set the number of beats in every measure of the staff |
 | `C` | Pick a chord shape and enter chord mode |
 | `N` | Insert a staff below |
 | `I` | Switch the staff between guitar and bass |

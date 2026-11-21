@@ -273,7 +273,7 @@ describe('with a real editor', () => {
 		const d3 = deps({ promptBeats: () => Promise.resolve(3) });
 		runAction(v, { type: 'pickBeats' }, d3);
 		await settle();
-		expect(v.state.doc.line(2).text).toBe('e|---------|------|');
+		expect(v.state.doc.line(2).text).toBe('e|---------|---------|');
 	});
 
 	it('sends action notices to notify', () => {

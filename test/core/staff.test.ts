@@ -11,7 +11,7 @@ import {
 	posToCol,
 	relabel,
 	restring,
-	setMeasureBeats,
+	setStaffBeats,
 	type Staff,
 	staffLabelsLowToHigh,
 	writeFret,
@@ -197,26 +197,27 @@ describe('clearCell', () => {
 	});
 });
 
-describe('setMeasureBeats', () => {
-	it('grows a measure on every row, preserving notes', () => {
+describe('setStaffBeats', () => {
+	it('grows every measure on every row, preserving notes', () => {
 		const rows = ['e|5--|2--|', 'B|---|---|'];
-		expect(apply(rows, setMeasureBeats(parsed(rows), 0, 2))).toEqual(['e|5-----|2--|', 'B|------|---|']);
+		expect(apply(rows, setStaffBeats(parsed(rows), 2))).toEqual(['e|5-----|2-----|', 'B|------|------|']);
 	});
 
-	it('shrinks a measure by dropping trailing beats, even with content', () => {
-		const rows = ['e|5--2--|', 'B|------|'];
-		expect(apply(rows, setMeasureBeats(parsed(rows), 0, 1))).toEqual(['e|5--|', 'B|---|']);
+	it('shrinks every measure by dropping trailing beats, even with content', () => {
+		const rows = ['e|5--2--|---7--|', 'B|------|------|'];
+		expect(apply(rows, setStaffBeats(parsed(rows), 1))).toEqual(['e|5--|---|', 'B|---|---|']);
 	});
 
-	it('changes only the target measure', () => {
-		const rows = ['e|---|5--|', 'B|---|---|'];
-		const result = parseStaff(apply(rows, setMeasureBeats(parsed(rows), 1, 3)), 0);
-		expect(result.ok && result.staff.measures.map((m) => m.beats)).toEqual([1, 3]);
+	it('evens out measures of different sizes', () => {
+		const rows = ['e|---|5-----|---------|', 'B|---|------|---------|'];
+		const result = parseStaff(apply(rows, setStaffBeats(parsed(rows), 2)), 0);
+		expect(result.ok && result.staff.measures.map((m) => m.beats)).toEqual([2, 2, 2]);
+		expect(result.ok && result.staff.rows[0]).toBe('e|------|5-----|------|');
 	});
 
-	it('produces no edits when the count is unchanged', () => {
-		const rows = ['e|---|', 'B|---|'];
-		expect(setMeasureBeats(parsed(rows), 0, 1)).toEqual([]);
+	it('produces no edits when every measure already has the count', () => {
+		const rows = ['e|---|---|', 'B|---|---|'];
+		expect(setStaffBeats(parsed(rows), 1)).toEqual([]);
 	});
 });
 

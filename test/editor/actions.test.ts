@@ -214,25 +214,23 @@ describe('pickers', () => {
 		expect(result.notice).toMatch(/2.string/);
 	});
 
-	it('requests beats for the current measure', () => {
+	it('requests beats, starting from the current measure', () => {
 		const { request } = applyAction(tabState(DOC, 1, 9), { type: 'pickBeats' }, DEFAULT_CONFIG);
-		expect(request).toEqual({ kind: 'beats', measure: 1, current: 2 });
+		expect(request).toEqual({ kind: 'beats', current: 2 });
 	});
 });
 
 describe('applyBeats', () => {
-	it('clamps the cursor when the measure shrinks', () => {
+	it('clamps the cursor when the measures shrink', () => {
 		const state = applyResult(tabState(DOC, 2, 5), applyBeats(tabState(DOC, 2, 5), 1));
-		expect(lines(state).slice(1, 3)).toEqual(['e|---|------|', 'B|---|------|']);
+		expect(lines(state).slice(1, 3)).toEqual(['e|---|---|', 'B|---|---|']);
 		expect(cursor(state)).toEqual({ row: 2, col: 2 });
 	});
 
-	it('keeps the cursor on the same position when an earlier measure grows', () => {
-		let state = tabState(DOC, 1, 12);
-		state = run(state, 'prevMeasure');
-		state = applyResult(state, applyBeats(state, 3));
-		expect(cursor(state)).toEqual({ row: 1, col: 2 });
-		expect(lines(state)[1]).toBe('e|---------|------|');
+	it('keeps the cursor on the same position when the measures grow', () => {
+		const state = applyResult(tabState(DOC, 1, 12), applyBeats(tabState(DOC, 1, 12), 3));
+		expect(cursor(state)).toEqual({ row: 1, col: 15 });
+		expect(lines(state)[1]).toBe('e|---------|---------|');
 	});
 });
 
