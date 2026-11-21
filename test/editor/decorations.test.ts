@@ -48,9 +48,20 @@ describe('legendText', () => {
 		expect(text.split('\n')).toEqual([
 			'Move · ←→ hl beat · ↑↓ jk string · {} HL measure',
 			'Edit · 0–9 fret · Space clear · ⌫ clear left',
+			'Measures · v ⇧←→ select measures · y Ctrl+C copy · p Ctrl+V paste after · d Del delete',
 			'Staff · T tuning · B beats · I guitar/bass · N new staff',
 			'Mode · C chord · Esc exit · ? fewer keys',
 		]);
+	});
+
+	it('shows Cmd shortcuts on macOS', () => {
+		const text = legendText(run(tabState(DOC, 1, 2), 'toggleKeys'), true);
+		expect(text).toContain('y ⌘C copy · p ⌘V paste after');
+	});
+
+	it('shows the selected measures and how to copy them', () => {
+		const state = run(tabState(DOC, 1, 2), 'selectNextMeasure');
+		expect(legendText(state)).toBe('Measures 1–2 selected\ny copy · d delete · Esc cancel');
 	});
 
 	it('collapses again on a second ?', () => {
@@ -84,6 +95,13 @@ describe('buildDecorations', () => {
 		const marks = collect(buildDecorations(state, config), state).filter((d) => d.spec.class === 'tablature-measure');
 		const rows = [state.doc.line(2).from, state.doc.line(3).from];
 		expect(marks.map(({ from, to }) => [from, to])).toEqual(rows.map((row) => [row + 9, row + 15]));
+	});
+
+	it('marks every selected measure as one range per row', () => {
+		const state = run(tabState(DOC, 1, 12), 'selectPrevMeasure');
+		const marks = collect(buildDecorations(state, config), state).filter((d) => d.spec.class === 'tablature-measure');
+		const rows = [state.doc.line(2).from, state.doc.line(3).from];
+		expect(marks.map(({ from, to }) => [from, to])).toEqual(rows.map((row) => [row + 2, row + 15]));
 	});
 
 	it('marks a row count that matches a taller staff', () => {

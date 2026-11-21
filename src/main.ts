@@ -35,7 +35,7 @@ export default class TablaturePlugin extends Plugin {
 			keysExpandedField,
 			selectionFilter,
 			keyPlugin(deps),
-			decorationsExtension(() => this.config),
+			decorationsExtension(() => this.config, Platform.isMacOS),
 		]);
 
 		this.addCommand({

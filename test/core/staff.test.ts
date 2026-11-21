@@ -12,6 +12,9 @@ import {
 	relabel,
 	restring,
 	setStaffBeats,
+	copyMeasures,
+	pasteMeasures,
+	deleteMeasures,
 	type Staff,
 	staffLabelsLowToHigh,
 	writeFret,
@@ -218,6 +221,60 @@ describe('setStaffBeats', () => {
 	it('produces no edits when every measure already has the count', () => {
 		const rows = ['e|---|---|', 'B|---|---|'];
 		expect(setStaffBeats(parsed(rows), 1)).toEqual([]);
+	});
+});
+
+describe('copyMeasures', () => {
+	it('copies one measure per row', () => {
+		const rows = ['e|5--|2--|', 'B|---|3--|'];
+		expect(copyMeasures(parsed(rows), 1, 1)).toEqual(['2--', '3--']);
+	});
+
+	it('copies a range with the bars between measures', () => {
+		const rows = ['e|5--|2--|7--|', 'B|---|3--|---|'];
+		expect(copyMeasures(parsed(rows), 0, 1)).toEqual(['5--|2--', '---|3--']);
+	});
+});
+
+describe('pasteMeasures', () => {
+	it('inserts the copied measures after the target measure', () => {
+		const rows = ['e|5--|2--|', 'B|---|---|'];
+		const result = pasteMeasures(parsed(rows), 0, ['7--|8--', '---|---']);
+		expect(result.ok && apply(rows, result.edits)).toEqual(['e|5--|7--|8--|2--|', 'B|---|---|---|---|']);
+	});
+
+	it('appends after the last measure', () => {
+		const rows = ['e|5--|', 'B|---|'];
+		const result = pasteMeasures(parsed(rows), 0, ['5--', '---']);
+		expect(result.ok && apply(rows, result.edits)).toEqual(['e|5--|5--|', 'B|---|---|']);
+	});
+
+	it('refuses measures copied from a staff with a different string count', () => {
+		const result = pasteMeasures(parsed(['e|---|', 'B|---|']), 0, ['---', '---', '---']);
+		expect(result).toEqual({ ok: false, problem: 'The copied measures have 3 strings, but this staff has 2.' });
+	});
+});
+
+describe('deleteMeasures', () => {
+	const rows = ['e|1--|2--|3--|', 'B|---|---|---|'];
+
+	it('removes a middle measure and one bar', () => {
+		const result = deleteMeasures(parsed(rows), 1, 1);
+		expect(result.ok && apply(rows, result.edits)).toEqual(['e|1--|3--|', 'B|---|---|']);
+	});
+
+	it('removes the first measures', () => {
+		const result = deleteMeasures(parsed(rows), 0, 1);
+		expect(result.ok && apply(rows, result.edits)).toEqual(['e|3--|', 'B|---|']);
+	});
+
+	it('removes the last measure', () => {
+		const result = deleteMeasures(parsed(rows), 2, 2);
+		expect(result.ok && apply(rows, result.edits)).toEqual(['e|1--|2--|', 'B|---|---|']);
+	});
+
+	it('refuses to remove every measure', () => {
+		expect(deleteMeasures(parsed(rows), 0, 2).ok).toBe(false);
 	});
 });
 

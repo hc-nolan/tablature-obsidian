@@ -8,9 +8,12 @@ import { allTunings, type Config, defaultTuning, type Instrument, type Shape, ty
 import {
 	clampPos,
 	clearCell,
+	copyMeasures,
+	deleteMeasures,
 	type LineEdit,
 	type Measure,
 	parseStaff,
+	pasteMeasures,
 	posToCol,
 	type Pos,
 	relabel,
@@ -27,6 +30,7 @@ import {
 	modeField,
 	OFF,
 	parseStaffAtRow,
+	selectedMeasures,
 	setMode,
 	toChanges,
 	toggleKeys,
@@ -49,6 +53,12 @@ export type Action =
 				| 'newStaff'
 				| 'swapInstrument'
 				| 'toggleKeys'
+				| 'toggleSelect'
+				| 'selectPrevMeasure'
+				| 'selectNextMeasure'
+				| 'copy'
+				| 'paste'
+				| 'deleteMeasures'
 				| 'exit';
 	  }
 	| { type: 'digit'; digit: string }
@@ -63,6 +73,8 @@ export interface ActionResult {
 	spec?: TransactionSpec;
 	notice?: string;
 	request?: PickerRequest;
+	/** Measures to hold for a later paste. */
+	copied?: string[];
 }
 
 function cursorAt(state: EditorState, staff: Staff, stringRow: number, pos: Pos): EditorSelection {
@@ -103,7 +115,7 @@ function editSpec(
 			),
 			scrollIntoView: true,
 			annotations: isolateHistory.of('full'),
-			effects: setMode.of({ ...mode, pending, pickerOpen: false }),
+			effects: setMode.of({ ...mode, pending, pickerOpen: false, selectFrom: null }),
 		},
 	};
 }
@@ -137,6 +149,7 @@ function switchStaff(
 	const parsed = parseStaff(state.doc.toJSON().slice(range.top, range.top + range.height), range.top);
 	if (!parsed.ok) return { notice: parsed.problem };
 	const staffFrom = state.doc.line(range.top + 1).from;
+	mode = { ...mode, selectFrom: null };
 	const target = clampPos(parsed.staff, pos);
 	if (!mode.chord) return moveTo(state, { ...mode, staffFrom }, parsed.staff, stringRow, target);
 
@@ -166,7 +179,17 @@ export function enterChord(state: EditorState, shapeName: string, config: Config
 	const names = Object.keys(shapes).sort();
 	const index = names.indexOf(shapeName);
 	if (index < 0) return { notice: `The shape "${shapeName}" doesn't fit this staff.` };
-	return { spec: { effects: setMode.of({ ...mode, kind: 'chord', pending: false, chord: { names, shapes, index, root: 0 } }) } };
+	return {
+		spec: {
+			effects: setMode.of({
+				...mode,
+				kind: 'chord',
+				pending: false,
+				selectFrom: null,
+				chord: { names, shapes, index, root: 0 },
+			}),
+		},
+	};
 }
 
 export function enterAt(state: EditorState, config: Config): ActionResult {
@@ -182,6 +205,7 @@ export function enterAt(state: EditorState, config: Config): ActionResult {
 		pending: false,
 		pickerOpen: false,
 		chord: null,
+		selectFrom: null,
 	};
 	const entered = state.update({ effects: setMode.of(mode), selection: EditorSelection.single(head) }).state;
 	const info = currentStaff(entered);
@@ -204,7 +228,7 @@ export function insertStaff(state: EditorState, config: Config): ActionResult {
 			selection: EditorSelection.single(top.from + top.text.indexOf('|') + 1),
 			scrollIntoView: true,
 			annotations: isolateHistory.of('full'),
-			effects: setMode.of({ kind: 'tab', staffFrom: top.from, pending: false, pickerOpen: false, chord: null }),
+			effects: setMode.of({ kind: 'tab', staffFrom: top.from, pending: false, pickerOpen: false, chord: null, selectFrom: null }),
 		},
 	};
 }
@@ -242,7 +266,13 @@ export function applyBeats(state: EditorState, beats: number): ActionResult {
 	return editSpec(state, mode, info.staff, edits, info.row, info.pos, false);
 }
 
-export function applyAction(state: EditorState, action: Action, config: Config): ActionResult {
+/** `copied` is what the last copy action produced, if anything, for `paste`. */
+export function applyAction(
+	state: EditorState,
+	action: Action,
+	config: Config,
+	copied: string[] | null = null,
+): ActionResult {
 	if (action.type === 'newStaff') return insertStaff(state, config);
 
 	const mode = state.field(modeField);
@@ -327,7 +357,39 @@ export function applyAction(state: EditorState, action: Action, config: Config):
 			const edits = writeVoicing(staff, pos, applyRoot(shape, mode.chord.root));
 			return editSpec(state, mode, staff, edits, row, pos, false);
 		}
+		case 'toggleSelect':
+			return { spec: { effects: setMode.of({ ...mode, selectFrom: mode.selectFrom === null ? pos.measure : null }) } };
+		case 'selectPrevMeasure':
+		case 'selectNextMeasure': {
+			const step = action.type === 'selectNextMeasure' ? 1 : -1;
+			const measure = Math.max(0, Math.min(staff.measures.length - 1, pos.measure + step));
+			const selecting = { ...mode, selectFrom: mode.selectFrom ?? pos.measure };
+			return moveTo(state, selecting, staff, row, { measure, beat: 0 });
+		}
+		case 'copy': {
+			const [from, to] = selectedMeasures(mode, staff, pos);
+			const count = to - from + 1;
+			return {
+				copied: copyMeasures(staff, from, to),
+				notice: `Copied ${count} measure${count === 1 ? '' : 's'}.`,
+				spec: { effects: setMode.of({ ...mode, selectFrom: null }) },
+			};
+		}
+		case 'paste': {
+			if (!copied) return { notice: 'Nothing copied yet. Press y to copy the current measure.' };
+			const result = pasteMeasures(staff, pos.measure, copied);
+			if (!result.ok) return { notice: result.problem };
+			return editSpec(state, mode, staff, result.edits, row, { measure: pos.measure + 1, beat: 0 }, false);
+		}
+		case 'deleteMeasures': {
+			const [from, to] = selectedMeasures(mode, staff, pos);
+			const result = deleteMeasures(staff, from, to);
+			if (!result.ok) return { notice: result.problem };
+			const measure = Math.min(from, staff.measures.length - 1 - (to - from + 1));
+			return editSpec(state, mode, staff, result.edits, row, { measure, beat: 0 }, false);
+		}
 		case 'exit':
+			if (mode.selectFrom !== null) return { spec: { effects: setMode.of({ ...mode, selectFrom: null }) } };
 			return {
 				spec: { effects: setMode.of(mode.kind === 'chord' ? { ...mode, kind: 'tab', chord: null } : OFF) },
 			};

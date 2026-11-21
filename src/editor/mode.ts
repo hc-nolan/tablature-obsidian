@@ -23,6 +23,8 @@ export type ActiveMode = {
 	pending: boolean;
 	pickerOpen: boolean;
 	chord: ChordState | null;
+	/** The measure a measure selection started from, or null when nothing is selected. */
+	selectFrom: number | null;
 };
 
 export type ModeState = { kind: 'off'; notice: string | null } | ActiveMode;
@@ -103,6 +105,12 @@ export function currentStaff(state: EditorState): { staff: Staff; row: number; p
 	return { staff, row, pos: colToPos(staff, state.selection.main.head - line.from) };
 }
 
+/** The measures to copy: the selection, or just the cursor's measure. */
+export function selectedMeasures(mode: ActiveMode, staff: Staff, pos: Pos): [from: number, to: number] {
+	const anchor = mode.selectFrom === null ? pos.measure : Math.min(mode.selectFrom, staff.measures.length - 1);
+	return [Math.min(anchor, pos.measure), Math.max(anchor, pos.measure)];
+}
+
 export function toChanges(state: EditorState, edits: LineEdit[]): ChangeSpec[] {
 	return edits.map(({ row, from, to, insert }) => {
 		const lineFrom = state.doc.line(row + 1).from;
@@ -139,7 +147,7 @@ export const selectionFilter: Extension = EditorState.transactionFilter.of((tr) 
 		tr,
 		{
 			selection: EditorSelection.single(anchor),
-			effects: setMode.of({ ...switched, staffFrom, pending: false }),
+			effects: setMode.of({ ...switched, staffFrom, pending: false, selectFrom: null }),
 			sequential: true,
 		},
 	];
