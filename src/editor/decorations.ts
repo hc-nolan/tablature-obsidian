@@ -51,8 +51,11 @@ export interface Legend {
 const MORE: KeyHint = ['?', 'more keys'];
 const FEWER: KeyHint = ['?', 'fewer keys'];
 
+const MOVE: LegendRow = { group: 'Move', keys: [['←→ hl', 'beat'], ['↑↓ jk', 'string'], ['{} HL', 'measure']] };
+
 const TAB_ESSENTIALS: KeyHint[] = [['Space', 'clear'], ['C', 'chord'], ['Esc', 'exit'], MORE];
 const TAB_ALL: LegendRow[] = [
+	MOVE,
 	{ group: 'Edit', keys: [['0–9', 'fret'], ['Space', 'clear'], ['⌫', 'clear left']] },
 	{ group: 'Staff', keys: [['T', 'tuning'], ['B', 'beats'], ['I', 'guitar/bass'], ['N', 'new staff']] },
 	{ group: 'Mode', keys: [['C', 'chord'], ['Esc', 'exit'], FEWER] },
@@ -60,6 +63,7 @@ const TAB_ALL: LegendRow[] = [
 
 const CHORD_ESSENTIALS: KeyHint[] = [['Tab', 'next'], ['Enter', 'insert'], ['Esc', 'back'], MORE];
 const CHORD_ALL: LegendRow[] = [
+	MOVE,
 	{ group: 'Shape', keys: [['Tab', 'next'], ['⇧Tab', 'previous'], ['C', 'pick']] },
 	{ group: 'Root', keys: [['+', 'up'], ['-', 'down']] },
 	{ group: 'Mode', keys: [['Enter', 'insert'], ['Esc', 'back'], FEWER] },
