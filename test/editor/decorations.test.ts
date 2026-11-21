@@ -46,6 +46,7 @@ describe('legendText', () => {
 	it('lists every tab mode key in groups after ?', () => {
 		const text = legendText(run(tabState(DOC, 1, 2), 'toggleKeys'));
 		expect(text.split('\n')).toEqual([
+			'Move · ←→ hl beat · ↑↓ jk string · {} HL measure',
 			'Edit · 0–9 fret · Space clear · ⌫ clear left',
 			'Staff · T tuning · B beats · I guitar/bass · N new staff',
 			'Mode · C chord · Esc exit · ? fewer keys',
@@ -66,7 +67,9 @@ describe('legendText', () => {
 	it('shows the shape and root above the chord keys', () => {
 		const state = run(chordState(), 'rootUp', config);
 		expect(legendText(state)).toBe('Alpha · root 1\nTab next · Enter insert · Esc back · ? more keys');
-		expect(legendText(run(state, 'toggleKeys', config))).toContain('Root · + up · - down');
+		const expanded = legendText(run(state, 'toggleKeys', config));
+		expect(expanded).toContain('Root · + up · - down');
+		expect(expanded).toContain('Move · ←→ hl beat · ↑↓ jk string · {} HL measure');
 	});
 });
 
