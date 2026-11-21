@@ -234,6 +234,84 @@ describe('applyBeats', () => {
 	});
 });
 
+describe('copy and paste', () => {
+	const NOTED = ['```tab', 'e|5-----|7-----|------|', 'B|------|------|------|', '```'];
+
+	it('copies the current measure and pastes it after the cursor measure', () => {
+		const start = tabState(NOTED, 1, 2);
+		const { copied, notice } = applyAction(start, { type: 'copy' }, DEFAULT_CONFIG);
+		expect(copied).toEqual(['5-----', '------']);
+		expect(notice).toBe('Copied 1 measure.');
+		const at = run(run(start, 'nextMeasure'), 'nextMeasure');
+		const state = applyResult(at, applyAction(at, { type: 'paste' }, DEFAULT_CONFIG, copied));
+		expect(lines(state).slice(1, 3)).toEqual(['e|5-----|7-----|------|5-----|', 'B|------|------|------|------|']);
+		expect(cursor(state)).toEqual({ row: 1, col: 23 });
+	});
+
+	it('copies every measure between the selection start and the cursor', () => {
+		let state = run(tabState(NOTED, 1, 9), 'toggleSelect');
+		state = run(state, 'prevMeasure');
+		expect(applyAction(state, { type: 'copy' }, DEFAULT_CONFIG).copied).toEqual(['5-----|7-----', '------|------']);
+	});
+
+	it('starts a selection with shift-select and extends it by a measure', () => {
+		let state = run(tabState(NOTED, 1, 2), 'selectNextMeasure');
+		state = run(state, 'selectNextMeasure');
+		expect(cursor(state)).toEqual({ row: 1, col: 16 });
+		const { copied, notice } = applyAction(state, { type: 'copy' }, DEFAULT_CONFIG);
+		expect(copied).toHaveLength(2);
+		expect(notice).toBe('Copied 3 measures.');
+	});
+
+	it('clears the selection after copying', () => {
+		let state = run(run(tabState(NOTED, 1, 2), 'toggleSelect'), 'nextMeasure');
+		state = run(state, 'copy');
+		expect(state.field(modeField)).toMatchObject({ selectFrom: null });
+	});
+
+	it('cancels the selection on Esc before exiting', () => {
+		let state = run(tabState(NOTED, 1, 2), 'toggleSelect');
+		state = run(state, 'exit');
+		expect(state.field(modeField)).toMatchObject({ kind: 'tab', selectFrom: null });
+		expect(run(state, 'exit').field(modeField).kind).toBe('off');
+	});
+
+	it('pastes as one undo step', () => {
+		const start = tabState(NOTED, 1, 2);
+		const pasted = applyResult(start, applyAction(start, { type: 'paste' }, DEFAULT_CONFIG, ['1--', '---']));
+		expect(lines(runUndo(pasted))).toEqual(NOTED);
+	});
+
+	it('deletes the current measure and stays on the measure that takes its place', () => {
+		const state = run(tabState(NOTED, 1, 2), 'deleteMeasures');
+		expect(lines(state).slice(1, 3)).toEqual(['e|7-----|------|', 'B|------|------|']);
+		expect(cursor(state)).toEqual({ row: 1, col: 2 });
+	});
+
+	it('deletes the selected measures and lands on the new last measure', () => {
+		let state = run(tabState(NOTED, 1, 16), 'selectPrevMeasure');
+		state = run(state, 'deleteMeasures');
+		expect(lines(state).slice(1, 3)).toEqual(['e|5-----|', 'B|------|']);
+		expect(cursor(state)).toEqual({ row: 1, col: 2 });
+		expect(state.field(modeField)).toMatchObject({ kind: 'tab', selectFrom: null });
+	});
+
+	it('refuses to delete every measure', () => {
+		const result = applyAction(tabState(['```tab', 'e|---|', 'B|---|', '```'], 1, 2), { type: 'deleteMeasures' }, DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/at least one measure/);
+	});
+
+	it('explains when nothing has been copied', () => {
+		expect(applyAction(tabState(NOTED, 1, 2), { type: 'paste' }, DEFAULT_CONFIG).notice).toMatch(/Nothing copied/);
+	});
+
+	it('refuses to paste onto a staff with a different string count', () => {
+		const result = applyAction(tabState(NOTED, 1, 2), { type: 'paste' }, DEFAULT_CONFIG, ['---', '---', '---']);
+		expect(result.notice).toMatch(/3 strings/);
+		expect(result.spec).toBeUndefined();
+	});
+});
+
 describe('applyTuning', () => {
 	it('relabels and keeps the same position when labels get wider', () => {
 		const start = tabState(DOC, 1, 5);

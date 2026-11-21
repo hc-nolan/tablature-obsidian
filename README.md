@@ -49,6 +49,10 @@ E|------------|------------|
 | `Backspace` | Clear the previous cell and move onto it |
 | `T` | Change the staff's tuning |
 | `B` | Set the number of beats in every measure of the staff |
+| `v`, or `Shift`+`←`/`→` | Select measures. After `v`, moving extends the selection; `v` or `Esc` cancels it |
+| `y` or `Ctrl`+`C` (`⌘`+`C` on macOS) | Copy the selected measures, or the current one |
+| `p` or `Ctrl`+`V` (`⌘`+`V` on macOS) | Paste the copied measures after the current one |
+| `d` or `Delete` | Delete the selected measures, or the current one |
 | `C` | Pick a chord shape and enter chord mode |
 | `N` | Insert a staff below |
 | `I` | Switch the staff between guitar and bass |

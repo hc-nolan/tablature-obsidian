@@ -5,7 +5,7 @@ import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemir
 import { applyRoot, matchTuning } from '../core/chords';
 import { allTunings, type Config, type Shape } from '../core/config';
 import { BEAT_WIDTH, type Measure, posToCol, type Pos, type Staff } from '../core/staff';
-import { currentStaff, keysExpanded, modeField } from './mode';
+import { currentStaff, keysExpanded, modeField, selectedMeasures } from './mode';
 
 const FILLER = '-';
 const CELL_CONTENT_WIDTH = 2;
@@ -54,9 +54,18 @@ const FEWER: KeyHint = ['?', 'fewer keys'];
 const MOVE: LegendRow = { group: 'Move', keys: [['←→ hl', 'beat'], ['↑↓ jk', 'string'], ['{} HL', 'measure']] };
 
 const TAB_ESSENTIALS: KeyHint[] = [['Space', 'clear'], ['C', 'chord'], ['Esc', 'exit'], MORE];
-const TAB_ALL: LegendRow[] = [
+const tabAll = (isMac: boolean): LegendRow[] => [
 	MOVE,
 	{ group: 'Edit', keys: [['0–9', 'fret'], ['Space', 'clear'], ['⌫', 'clear left']] },
+	{
+		group: 'Measures',
+		keys: [
+			['v ⇧←→', 'select measures'],
+			[isMac ? 'y ⌘C' : 'y Ctrl+C', 'copy'],
+			[isMac ? 'p ⌘V' : 'p Ctrl+V', 'paste after'],
+			['d Del', 'delete'],
+		],
+	},
 	{ group: 'Staff', keys: [['T', 'tuning'], ['B', 'beats'], ['I', 'guitar/bass'], ['N', 'new staff']] },
 	{ group: 'Mode', keys: [['C', 'chord'], ['Esc', 'exit'], FEWER] },
 ];
@@ -69,7 +78,7 @@ const CHORD_ALL: LegendRow[] = [
 	{ group: 'Mode', keys: [['Enter', 'insert'], ['Esc', 'back'], FEWER] },
 ];
 
-export function legend(state: EditorState): Legend {
+export function legend(state: EditorState, isMac = false): Legend {
 	const mode = state.field(modeField);
 	if (mode.kind === 'off') return { status: null, rows: [] };
 	const all = keysExpanded(state);
@@ -78,7 +87,14 @@ export function legend(state: EditorState): Legend {
 		const status = `${name} · root ${mode.chord.root}`;
 		return { status, rows: all ? CHORD_ALL : [{ group: null, keys: CHORD_ESSENTIALS }] };
 	}
-	return { status: null, rows: all ? TAB_ALL : [{ group: null, keys: TAB_ESSENTIALS }] };
+	const info = mode.selectFrom === null ? null : currentStaff(state);
+	if (info) {
+		const [from, to] = selectedMeasures(mode, info.staff, info.pos);
+		const status = from === to ? `Measure ${from + 1} selected` : `Measures ${from + 1}–${to + 1} selected`;
+		const keys: KeyHint[] = [['y', 'copy'], ['d', 'delete'], ['Esc', 'cancel']];
+		return { status, rows: all ? tabAll(isMac) : [{ group: null, keys }] };
+	}
+	return { status: null, rows: all ? tabAll(isMac) : [{ group: null, keys: TAB_ESSENTIALS }] };
 }
 
 function legendLines({ status, rows }: Legend): string {
@@ -89,8 +105,8 @@ function legendLines({ status, rows }: Legend): string {
 }
 
 /** The legend as plain text, one line per row. */
-export function legendText(state: EditorState): string {
-	return legendLines(legend(state));
+export function legendText(state: EditorState, isMac = false): string {
+	return legendLines(legend(state, isMac));
 }
 
 class LegendWidget extends WidgetType {
@@ -123,12 +139,14 @@ class LegendWidget extends WidgetType {
 	}
 }
 
-export function buildDecorations(state: EditorState, config: Config): DecorationSet {
+export function buildDecorations(state: EditorState, config: Config, isMac = false): DecorationSet {
 	const mode = state.field(modeField);
 	const info = currentStaff(state);
 	if (mode.kind === 'off' || !info) return Decoration.none;
 	const { staff, pos } = info;
-	const measure = staff.measures[pos.measure] as Measure;
+	const [firstSelected, lastSelected] = selectedMeasures(mode, staff, pos);
+	const first = staff.measures[firstSelected] as Measure;
+	const last = staff.measures[lastSelected] as Measure;
 	const rowFrom = (row: number): number => state.doc.line(staff.top + row + 1).from;
 	const count = staff.rows.length;
 	const tuningName = matchTuning(staff, allTunings(config))?.name ?? 'Custom';
@@ -143,9 +161,12 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 	);
 
 	for (let row = 0; row < count; row++) {
-		const from = rowFrom(row) + measure.start;
+		const from = rowFrom(row);
 		ranges.push(
-			Decoration.mark({ class: 'tablature-measure' }).range(from, from + measure.beats * BEAT_WIDTH),
+			Decoration.mark({ class: 'tablature-measure' }).range(
+				from + first.start,
+				from + last.start + last.beats * BEAT_WIDTH,
+			),
 		);
 	}
 
@@ -167,7 +188,7 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 
 	ranges.push(
 		Decoration.widget({
-			widget: new LegendWidget(legend(state)),
+			widget: new LegendWidget(legend(state, isMac)),
 			block: true,
 			side: 1,
 		}).range(state.doc.line(staff.top + count).to),
@@ -176,15 +197,15 @@ export function buildDecorations(state: EditorState, config: Config): Decoration
 	return Decoration.set(ranges, true);
 }
 
-export function decorationsExtension(getConfig: () => Config): Extension {
+export function decorationsExtension(getConfig: () => Config, isMac = false): Extension {
 	return StateField.define<DecorationSet>({
-		create: (state) => buildDecorations(state, getConfig()),
+		create: (state) => buildDecorations(state, getConfig(), isMac),
 		update: (value, tr) =>
 			tr.docChanged ||
 			tr.selection ||
 			tr.startState.field(modeField, false) !== tr.state.field(modeField) ||
 			keysExpanded(tr.startState) !== keysExpanded(tr.state)
-				? buildDecorations(tr.state, getConfig())
+				? buildDecorations(tr.state, getConfig(), isMac)
 				: value,
 		provide: (field) => EditorView.decorations.from(field),
 	});

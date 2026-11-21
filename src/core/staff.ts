@@ -139,6 +139,44 @@ export function setStaffBeats(staff: Staff, beats: number): LineEdit[] {
 	}));
 }
 
+/** Copies measures `from` to `to` inclusive, one string per row, keeping the bars between them. */
+export function copyMeasures(staff: Staff, from: number, to: number): string[] {
+	const first = staff.measures[from] as Measure;
+	const last = staff.measures[to] as Measure;
+	return staff.rows.map((row) => row.slice(first.start, last.start + last.beats * BEAT_WIDTH));
+}
+
+export type PasteResult = { ok: true; edits: LineEdit[] } | { ok: false; problem: string };
+
+/** Inserts copied measures after measure `after`. */
+export function pasteMeasures(staff: Staff, after: number, copied: string[]): PasteResult {
+	if (copied.length !== staff.rows.length) {
+		return {
+			ok: false,
+			problem: `The copied measures have ${copied.length} strings, but this staff has ${staff.rows.length}.`,
+		};
+	}
+	const target = staff.measures[after] as Measure;
+	const end = target.start + target.beats * BEAT_WIDTH;
+	return {
+		ok: true,
+		edits: staff.rows.map((_, i) => ({ row: staff.top + i, from: end, to: end, insert: `|${copied[i] as string}` })),
+	};
+}
+
+/** Removes measures `from` to `to` inclusive with one of their bars. A staff keeps at least one measure. */
+export function deleteMeasures(staff: Staff, from: number, to: number): PasteResult {
+	if (from === 0 && to === staff.measures.length - 1) {
+		return { ok: false, problem: "A staff needs at least one measure, so this can't delete them all." };
+	}
+	const first = staff.measures[from] as Measure;
+	const last = staff.measures[to] as Measure;
+	const end = last.start + last.beats * BEAT_WIDTH;
+	// Take the bar before the range, or after it when the range starts the staff.
+	const [cut, until] = from > 0 ? [first.start - 1, end] : [first.start, end + 1];
+	return { ok: true, edits: staff.rows.map((_, i) => ({ row: staff.top + i, from: cut, to: until, insert: '' })) };
+}
+
 export function relabel(staff: Staff, labelsLowToHigh: string[]): LineEdit[] {
 	const width = Math.max(...labelsLowToHigh.map((label) => label.length));
 	const labelEnd = (staff.rows[0] as string).indexOf('|');

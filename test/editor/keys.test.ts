@@ -50,8 +50,30 @@ describe('resolveKey in tab mode', () => {
 		['C', 'pickShape'],
 		['N', 'newStaff'],
 		['I', 'swapInstrument'],
+		['v', 'toggleSelect'],
+		['y', 'copy'],
+		['p', 'paste'],
+		['d', 'deleteMeasures'],
+		['Delete', 'deleteMeasures'],
 	])('%j → %s', (key, type) => {
 		expect(resolveKey('tab', input(key))).toEqual(action(type));
+	});
+
+	it('maps Ctrl+C and Ctrl+V to copy and paste', () => {
+		expect(resolveKey('tab', input('c', { ctrl: true }))).toEqual(action('copy'));
+		expect(resolveKey('tab', input('v', { ctrl: true }))).toEqual(action('paste'));
+		expect(resolveKey('tab', input('c', { meta: true }))).toEqual({ kind: 'pass' });
+	});
+
+	it('maps Cmd+C and Cmd+V on macOS', () => {
+		expect(resolveKey('tab', input('c', { meta: true, mac: true }))).toEqual(action('copy'));
+		expect(resolveKey('tab', input('v', { meta: true, mac: true }))).toEqual(action('paste'));
+		expect(resolveKey('tab', input('c', { ctrl: true, mac: true }))).toEqual({ kind: 'pass' });
+	});
+
+	it('maps Shift+arrows to measure selection', () => {
+		expect(resolveKey('tab', input('ArrowLeft', { shift: true }))).toEqual(action('selectPrevMeasure'));
+		expect(resolveKey('tab', input('ArrowRight', { shift: true }))).toEqual(action('selectNextMeasure'));
 	});
 
 	it.each(['0', '1', '5', '9'])('%s writes a digit', (digit) => {
@@ -274,6 +296,14 @@ describe('with a real editor', () => {
 		runAction(v, { type: 'pickBeats' }, d3);
 		await settle();
 		expect(v.state.doc.line(2).text).toBe('e|---------|---------|');
+	});
+
+	it('pastes what an earlier copy action copied', () => {
+		const d = deps();
+		const v = mount(d);
+		runAction(v, { type: 'copy' }, d);
+		runAction(v, { type: 'paste' }, d);
+		expect(v.state.doc.line(2).text).toBe('e|------|------|------|');
 	});
 
 	it('sends action notices to notify', () => {
