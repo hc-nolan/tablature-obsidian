@@ -35,4 +35,10 @@ export default defineConfig(
 		files: ['test/**/*.ts'],
 		rules: { 'obsidianmd/prefer-create-el': 'off' },
 	},
+	{
+		// The decoration widgets build plain DOM on purpose, so the core/editor barrel works in a host
+		// without Obsidian's `createEl` globals.
+		files: ['src/editor/decorations.ts'],
+		rules: { 'obsidianmd/prefer-create-el': 'off' },
+	},
 );

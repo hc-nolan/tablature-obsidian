@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { EditorState, StateEffect, type TransactionSpec } from '@codemirror/state';
 import { type Decoration, type DecorationSet, EditorView } from '@codemirror/view';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/core/config';
 import { parseStaff, type Staff } from '../../src/core/staff';
 import { enterAt, enterChord } from '../../src/editor/actions';
@@ -166,19 +166,12 @@ describe('in an editor that is already open', () => {
 	let view: EditorView;
 
 	beforeEach(() => {
-		vi.stubGlobal('createEl', (tag: string, info: { text?: string }) => {
-			const element = document.createElement(tag);
-			element.textContent = info.text ?? '';
-			return element;
-		});
-		vi.stubGlobal('createDiv', () => document.createElement('div'));
 		const state = EditorState.create({ doc: DOC.join('\n'), selection: { anchor: 9 } });
 		view = new EditorView({ state, parent: document.body });
 	});
 
 	afterEach(() => {
 		view.destroy();
-		vi.unstubAllGlobals();
 	});
 
 	const enable = () => view.dispatch({ effects: StateEffect.appendConfig.of(extensions()) });

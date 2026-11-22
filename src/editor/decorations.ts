@@ -1,4 +1,5 @@
 // Draws the measure highlight, indicator, legend and chord preview for the active staff.
+// Host-agnostic: plain DOM only, so a host other than Obsidian can import it.
 
 import { type EditorState, type Extension, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
@@ -9,6 +10,18 @@ import { currentStaff, keysExpanded, modeField, selectedMeasures } from './mode'
 
 const FILLER = '-';
 const CELL_CONTENT_WIDTH = 2;
+
+/** A plain element, so this file needs no host framework (Obsidian's `createEl`, Vue, …). */
+function el<K extends keyof HTMLElementTagNameMap>(
+	tag: K,
+	cls?: string,
+	text?: string,
+): HTMLElementTagNameMap[K] {
+	const node = document.createElement(tag);
+	if (cls) node.className = cls;
+	if (text !== undefined) node.textContent = text;
+	return node;
+}
 
 class TextWidget extends WidgetType {
 	constructor(
@@ -24,7 +37,7 @@ class TextWidget extends WidgetType {
 	}
 
 	toDOM(): HTMLElement {
-		return createEl(this.tag, { cls: this.className, text: this.text });
+		return el(this.tag, this.className, this.text);
 	}
 }
 
@@ -122,9 +135,13 @@ class LegendWidget extends WidgetType {
 	}
 
 	toDOM(): HTMLElement {
-		const add = <K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, cls?: string, text?: string) =>
-			parent.appendChild(createEl(tag, { cls, text }));
-		const root = createDiv({ cls: 'tablature-legend' });
+		const add = <K extends keyof HTMLElementTagNameMap>(
+			parent: HTMLElement,
+			tag: K,
+			cls?: string,
+			text?: string,
+		) => parent.appendChild(el(tag, cls, text));
+		const root = el('div', 'tablature-legend');
 		if (this.value.status) add(root, 'div', 'tablature-legend-status', this.value.status);
 		for (const { group, keys } of this.value.rows) {
 			const row = add(root, 'div', 'tablature-legend-row');

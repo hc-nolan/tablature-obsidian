@@ -4,6 +4,10 @@
   "description": "Write and edit guitar and bass tabs from the keyboard, in fenced code blocks.",
   "main": "main.js",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./styles.css"
+  },
   "license": "GPL-3.0-only",
   "private": true,
   "scripts": {
@@ -12,6 +16,11 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
+  },
+  "peerDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
