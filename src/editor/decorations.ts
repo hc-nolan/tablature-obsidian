@@ -32,11 +32,11 @@ class TextWidget extends WidgetType {
 		super();
 	}
 
-	eq(other: TextWidget): boolean {
+	override eq(other: TextWidget): boolean {
 		return other.text === this.text && other.className === this.className;
 	}
 
-	toDOM(): HTMLElement {
+	override toDOM(): HTMLElement {
 		return el(this.tag, this.className, this.text);
 	}
 }
@@ -130,11 +130,11 @@ class LegendWidget extends WidgetType {
 		this.text = legendLines(value);
 	}
 
-	eq(other: LegendWidget): boolean {
+	override eq(other: LegendWidget): boolean {
 		return JSON.stringify(other.value) === JSON.stringify(this.value);
 	}
 
-	toDOM(): HTMLElement {
+	override toDOM(): HTMLElement {
 		const add = <K extends keyof HTMLElementTagNameMap>(
 			parent: HTMLElement,
 			tag: K,
