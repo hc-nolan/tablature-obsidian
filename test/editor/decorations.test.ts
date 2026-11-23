@@ -8,7 +8,7 @@ import { enterAt, enterChord } from '../../src/editor/actions';
 import { buildDecorations, decorationsExtension, indicatorText, legendText } from '../../src/editor/decorations';
 import { type EditorDeps, keyPlugin } from '../../src/editor/keys';
 import { modeField, selectionFilter } from '../../src/editor/mode';
-import { applyResult, DOC, makeState, run, tabState } from './helpers';
+import { applyResult, DOC, domEl, makeState, run, tabState } from './helpers';
 
 type Found = { from: number; to: number; spec: { class?: string; block?: boolean; widget?: { text: string }; side?: number } };
 
@@ -87,19 +87,19 @@ describe('legendText', () => {
 describe('buildDecorations', () => {
 	it('is empty when off', () => {
 		const state = makeState(DOC, 1, 2);
-		expect(collect(buildDecorations(state, config), state)).toEqual([]);
+		expect(collect(buildDecorations(state, config, domEl), state)).toEqual([]);
 	});
 
 	it('marks exactly the current measure on every row', () => {
 		const state = tabState(DOC, 1, 12);
-		const marks = collect(buildDecorations(state, config), state).filter((d) => d.spec.class === 'tablature-measure');
+		const marks = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.class === 'tablature-measure');
 		const rows = [state.doc.line(2).from, state.doc.line(3).from];
 		expect(marks.map(({ from, to }) => [from, to])).toEqual(rows.map((row) => [row + 9, row + 15]));
 	});
 
 	it('marks every selected measure as one range per row', () => {
 		const state = run(tabState(DOC, 1, 12), 'selectPrevMeasure');
-		const marks = collect(buildDecorations(state, config), state).filter((d) => d.spec.class === 'tablature-measure');
+		const marks = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.class === 'tablature-measure');
 		const rows = [state.doc.line(2).from, state.doc.line(3).from];
 		expect(marks.map(({ from, to }) => [from, to])).toEqual(rows.map((row) => [row + 2, row + 15]));
 	});
@@ -107,13 +107,13 @@ describe('buildDecorations', () => {
 	it('marks a row count that matches a taller staff', () => {
 		const tall = ['```', ...['a', 'b', 'c', 'd', 'e'].map((l) => `${l}|---|`), '```'];
 		const state = tabState(tall, 1, 2);
-		const marks = collect(buildDecorations(state, config), state).filter((d) => d.spec.class === 'tablature-measure');
+		const marks = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.class === 'tablature-measure');
 		expect(marks).toHaveLength(5);
 	});
 
 	it('places the indicator above the top row and the legend below the bottom row', () => {
 		const state = tabState(DOC, 2, 5);
-		const blocks = collect(buildDecorations(state, config), state).filter((d) => d.spec.block);
+		const blocks = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.block);
 		expect(blocks).toHaveLength(2);
 		expect(blocks[0]?.from).toBe(state.doc.line(2).from);
 		expect(blocks[0]?.spec.widget?.text).toBe('m:1 b:2/2 · Custom');
@@ -124,13 +124,13 @@ describe('buildDecorations', () => {
 	it('uses the matched tuning name', () => {
 		const rows = ['```', ...['e', 'B', 'G', 'D', 'A', 'E'].map((l) => `${l}|---|`), '```'];
 		const state = tabState(rows, 1, 2);
-		const blocks = collect(buildDecorations(state, DEFAULT_CONFIG), state).filter((d) => d.spec.block);
+		const blocks = collect(buildDecorations(state, DEFAULT_CONFIG, domEl), state).filter((d) => d.spec.block);
 		expect(blocks[0]?.spec.widget?.text).toContain('Standard');
 	});
 
 	it('previews the voicing over 2 characters of each row in chord mode', () => {
 		const state = run(chordState(), 'rootUp', config);
-		const previews = collect(buildDecorations(state, config), state).filter(
+		const previews = collect(buildDecorations(state, config, domEl), state).filter(
 			(d) => d.spec.widget && !d.spec.block,
 		);
 		expect(previews.map((d) => [d.from, d.to, d.spec.widget?.text])).toEqual([
@@ -141,13 +141,13 @@ describe('buildDecorations', () => {
 
 	it('shows no preview in tab mode', () => {
 		const state = tabState(DOC, 1, 5);
-		const previews = collect(buildDecorations(state, config), state).filter((d) => d.spec.widget && !d.spec.block);
+		const previews = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.widget && !d.spec.block);
 		expect(previews).toEqual([]);
 	});
 
 	it('shows the chord legend, not the tab legend, in chord mode', () => {
 		const state = chordState('Muted');
-		const blocks = collect(buildDecorations(state, config), state).filter((d) => d.spec.block);
+		const blocks = collect(buildDecorations(state, config, domEl), state).filter((d) => d.spec.block);
 		expect(blocks[1]?.spec.widget?.text).toContain('Muted');
 		expect(blocks[1]?.spec.widget?.text).not.toContain('Esc exit');
 	});
@@ -162,7 +162,7 @@ describe('in an editor that is already open', () => {
 		notify: () => undefined,
 		isMac: false,
 	};
-	const extensions = () => [modeField, selectionFilter, keyPlugin(deps), decorationsExtension(() => config)];
+	const extensions = () => [modeField, selectionFilter, keyPlugin(deps), decorationsExtension(() => config, domEl)];
 	let view: EditorView;
 
 	beforeEach(() => {
