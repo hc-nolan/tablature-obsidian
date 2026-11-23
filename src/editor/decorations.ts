@@ -88,6 +88,8 @@ const CHORD_ALL: LegendRow[] = [
 	MOVE,
 	{ group: 'Shape', keys: [['Tab', 'next'], ['⇧Tab', 'previous'], ['C', 'pick']] },
 	{ group: 'Root', keys: [['+', 'up'], ['-', 'down']] },
+
+	{ group: 'Edit', keys: [['Space', 'clear beat'], ['⌫', 'clear beat left']] },
 	{ group: 'Mode', keys: [['Enter', 'insert'], ['Esc', 'back'], FEWER] },
 ];
 

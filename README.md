@@ -74,6 +74,8 @@ A preview of the chord follows the cursor until you write it.
 | `Tab`, `Shift+Tab` | Next or previous shape |
 | `+` or `=`, `-` | Move the root fret up or down |
 | `Enter` | Write the chord |
+| `Space` | Clear every string on the beat |
+| `Backspace` | Clear every string on the previous beat and move onto it |
 | `C` | Pick a different shape |
 | Movement keys | As in tab mode |
 | `Esc` or `q` | Return to tab mode |

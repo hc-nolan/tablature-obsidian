@@ -439,6 +439,26 @@ describe('chord mode', () => {
 		expect(lines(state).slice(1, 3)).toEqual(['e|---3--|------|', 'B|---x--|------|']);
 	});
 
+	it('clears every string on the beat and stays in chord mode', () => {
+		const state = runC(runC(chordState(), 'writeChord'), 'clear');
+		expect(lines(state)).toEqual(DOC);
+		expect(state.field(modeField).kind).toBe('chord');
+		expect(cursor(state)).toEqual({ row: 1, col: 5 });
+	});
+
+	it('clears every string on the previous beat and moves onto it', () => {
+		const written = runC(runC(chordState(), 'writeChord'), 'right');
+		const state = runC(written, 'clearLeft');
+		expect(lines(state)).toEqual(DOC);
+		expect(cursor(state)).toEqual({ row: 1, col: 5 });
+		expect(state.field(modeField).kind).toBe('chord');
+	});
+
+	it('still clears a single cell in tab mode', () => {
+		const written = runC(runC(chordState(), 'writeChord'), 'exit');
+		expect(lines(run(written, 'clear')).slice(1, 3)).toEqual(['e|------|------|', 'B|---0--|------|']);
+	});
+
 	it('undoes a whole chord in one step', () => {
 		expect(lines(runUndo(runC(chordState(), 'writeChord')))).toEqual(DOC);
 	});

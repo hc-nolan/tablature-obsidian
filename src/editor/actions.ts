@@ -133,6 +133,12 @@ function posRight(staff: Staff, pos: Pos): Pos {
 	return pos.measure + 1 < staff.measures.length ? { measure: pos.measure + 1, beat: 0 } : pos;
 }
 
+/** Tab mode clears one cell. Chord mode clears the whole beat, since a chord fills every string. */
+function clearEdits(mode: ActiveMode, staff: Staff, stringRow: number, pos: Pos): LineEdit[] {
+	if (mode.kind !== 'chord') return [clearCell(staff, stringRow, pos)];
+	return staff.rows.map((_, row) => clearCell(staff, row, pos));
+}
+
 function clampRoot(chord: ChordState): ChordState {
 	const shape = chord.shapes[chord.names[chord.index] as string] as Shape;
 	return { ...chord, root: Math.max(0, Math.min(maxRoot(shape), chord.root)) };
@@ -313,12 +319,12 @@ export function applyAction(
 			return editSpec(state, mode, staff, [edit], row, pos, pending);
 		}
 		case 'clear':
-			return editSpec(state, mode, staff, [clearCell(staff, row, pos)], row, pos, false);
+			return editSpec(state, mode, staff, clearEdits(mode, staff, row, pos), row, pos, false);
 		case 'clearLeft': {
 			// The cursor is drawn at the start of its cell, so like a text editor, Backspace clears the cell before it.
 			const left = posLeft(staff, pos);
 			if (left.measure === pos.measure && left.beat === pos.beat) return moveTo(state, mode, staff, row, pos);
-			return editSpec(state, mode, staff, [clearCell(staff, row, left)], row, left, false);
+			return editSpec(state, mode, staff, clearEdits(mode, staff, row, left), row, left, false);
 		}
 		case 'pickTuning': {
 			const tunings = allTunings(config);

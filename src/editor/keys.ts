@@ -71,6 +71,8 @@ const CHORD_KEYS: Record<string, Action['type']> = {
 	'-': 'rootDown',
 	Enter: 'writeChord',
 	C: 'pickShape',
+	' ': 'clear',
+	Backspace: 'clearLeft',
 };
 
 export function resolveKey(mode: 'tab' | 'chord', input: KeyInput): KeyResult {
