@@ -55,6 +55,7 @@ describe('resolveKey in tab mode', () => {
 		['p', 'paste'],
 		['d', 'deleteMeasures'],
 		['Delete', 'deleteMeasures'],
+		[':', 'toggleRepeat'],
 	])('%j → %s', (key, type) => {
 		expect(resolveKey('tab', input(key))).toEqual(action(type));
 	});

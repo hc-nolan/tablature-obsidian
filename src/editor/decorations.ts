@@ -77,6 +77,7 @@ const tabAll = (isMac: boolean): LegendRow[] => [
 			[isMac ? 'y ⌘C' : 'y Ctrl+C', 'copy'],
 			[isMac ? 'p ⌘V' : 'p Ctrl+V', 'paste after'],
 			['d Del', 'delete'],
+			[':', 'repeat'],
 		],
 	},
 	{ group: 'Staff', keys: [['T', 'tuning'], ['B', 'beats'], ['I', 'guitar/bass'], ['N', 'new staff']] },

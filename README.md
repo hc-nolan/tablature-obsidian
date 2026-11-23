@@ -33,6 +33,8 @@ E|------------|------------|
 - A staff is at least 2 consecutive lines. Each line has a label of 1 to 4 characters, then `|`, and ends with `|`.
 - Each beat is 3 characters wide, so every measure's width must be a multiple of 3.
 - The bars must line up on every row. If they don't, tab mode tells you what's wrong rather than editing the staff.
+- A repeat opens with `|:` and closes with `:|`, and `:|:` both closes one and opens the next. The colons belong to
+  the bar, so they don't count toward a measure's width.
 - Any other line, such as an annotation or a blank line, separates staves and is never changed.
 
 ## Keys
@@ -53,6 +55,7 @@ E|------------|------------|
 | `y` or `Ctrl`+`C` (`⌘`+`C` on macOS) | Copy the selected measures, or the current one |
 | `p` or `Ctrl`+`V` (`⌘`+`V` on macOS) | Paste the copied measures after the current one |
 | `d` or `Delete` | Delete the selected measures, or the current one |
+| `:` | Repeat the selected measures, or the current one, with `\|:` and `:\|` bars. Press again to remove it. A new repeat replaces any it overlaps |
 | `C` | Pick a chord shape and enter chord mode |
 | `N` | Insert a staff below |
 | `I` | Switch the staff between guitar and bass |

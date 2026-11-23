@@ -320,6 +320,25 @@ describe('copy and paste', () => {
 	});
 });
 
+describe('toggleRepeat', () => {
+	it('repeats the current measure and keeps the cursor on its cell', () => {
+		const state = run(tabState(DOC, 1, 2), 'toggleRepeat');
+		expect(lines(state).slice(1, 3)).toEqual(['e|:------:|------|', 'B|:------:|------|']);
+		expect(cursor(state)).toEqual({ row: 1, col: 3 });
+	});
+
+	it('repeats the selected measures', () => {
+		const selected = run(run(tabState(DOC, 1, 2), 'toggleSelect'), 'nextMeasure');
+		expect(lines(run(selected, 'toggleRepeat'))[1]).toBe('e|:------|------:|');
+	});
+
+	it('removes the repeat on a second press, in one undo step each', () => {
+		const once = run(tabState(DOC, 1, 2), 'toggleRepeat');
+		expect(lines(run(once, 'toggleRepeat'))).toEqual(DOC);
+		expect(lines(runUndo(once))).toEqual(DOC);
+	});
+});
+
 describe('applyTuning', () => {
 	it('relabels and keeps the same position when labels get wider', () => {
 		const start = tabState(DOC, 1, 5);

@@ -61,6 +61,7 @@ const TAB_KEYS: Record<string, Action['type']> = {
 	p: 'paste',
 	d: 'deleteMeasures',
 	Delete: 'deleteMeasures',
+	':': 'toggleRepeat',
 };
 
 const CHORD_KEYS: Record<string, Action['type']> = {

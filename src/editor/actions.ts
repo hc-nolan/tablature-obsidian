@@ -21,6 +21,7 @@ import {
 	setStaffBeats,
 	type Staff,
 	staffLabelsLowToHigh,
+	toggleRepeat,
 	writeFret,
 } from '../core/staff';
 import {
@@ -59,6 +60,7 @@ export type Action =
 				| 'copy'
 				| 'paste'
 				| 'deleteMeasures'
+				| 'toggleRepeat'
 				| 'exit';
 	  }
 	| { type: 'digit'; digit: string }
@@ -386,6 +388,10 @@ export function applyAction(
 			const result = pasteMeasures(staff, pos.measure, copied);
 			if (!result.ok) return { notice: result.problem };
 			return editSpec(state, mode, staff, result.edits, row, { measure: pos.measure + 1, beat: 0 }, false);
+		}
+		case 'toggleRepeat': {
+			const [from, to] = selectedMeasures(mode, staff, pos);
+			return editSpec(state, mode, staff, toggleRepeat(staff, from, to), row, pos, false);
 		}
 		case 'deleteMeasures': {
 			const [from, to] = selectedMeasures(mode, staff, pos);

@@ -48,7 +48,7 @@ describe('legendText', () => {
 		expect(text.split('\n')).toEqual([
 			'Move · ←→ hl beat · ↑↓ jk string · {} HL measure',
 			'Edit · 0–9 fret · Space clear · ⌫ clear left',
-			'Measures · v ⇧←→ select measures · y Ctrl+C copy · p Ctrl+V paste after · d Del delete',
+			'Measures · v ⇧←→ select measures · y Ctrl+C copy · p Ctrl+V paste after · d Del delete · : repeat',
 			'Staff · T tuning · B beats · I guitar/bass · N new staff',
 			'Mode · C chord · Esc exit · ? fewer keys',
 		]);
