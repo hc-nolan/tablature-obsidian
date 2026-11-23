@@ -47,7 +47,7 @@ describe('legendText', () => {
 		const text = legendText(run(tabState(DOC, 1, 2), 'toggleKeys'));
 		expect(text.split('\n')).toEqual([
 			'Move · ←→ hl beat · ↑↓ jk string · {} HL measure',
-			'Edit · 0–9 fret · Space clear · ⌫ clear left',
+			'Edit · 0–9 fret · / \\ slide · b bend · Space clear · ⌫ clear left',
 			'Measures · v ⇧←→ select measures · y Ctrl+C copy · p Ctrl+V paste after · d Del delete · : repeat',
 			'Staff · T tuning · B beats · I guitar/bass · N new staff',
 			'Mode · C chord · Esc exit · ? fewer keys',
@@ -134,8 +134,8 @@ describe('buildDecorations', () => {
 			(d) => d.spec.widget && !d.spec.block,
 		);
 		expect(previews.map((d) => [d.from, d.to, d.spec.widget?.text])).toEqual([
-			[state.doc.line(2).from + 5, state.doc.line(2).from + 7, '13'],
-			[state.doc.line(3).from + 5, state.doc.line(3).from + 7, '1-'],
+			[state.doc.line(2).from + 5, state.doc.line(2).from + 8, '13-'],
+			[state.doc.line(3).from + 5, state.doc.line(3).from + 8, '1--'],
 		]);
 	});
 

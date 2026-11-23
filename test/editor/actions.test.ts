@@ -320,6 +320,34 @@ describe('copy and paste', () => {
 	});
 });
 
+describe('technique', () => {
+	const bend = { type: 'technique', technique: 'b' } as const;
+
+	it('writes a quick bend and its target in one cell', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '7'), bend);
+		expect(lines(digits(bent, '9'))[1]).toBe('e|7b9---|------|');
+		expect(cursor(bent)).toEqual({ row: 1, col: 2 });
+	});
+
+	it('marks a double-digit fret without a target', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '13'), bend);
+		expect(lines(bent)[1]).toBe('e|13b---|------|');
+		expect(lines(digits(bent, '5'))[1]).toBe('e|5-----|------|');
+	});
+
+	it('ends a pending double-digit fret, so the next digit is the target', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '1'), bend);
+		expect(lines(digits(bent, '3'))[1]).toBe('e|1b3---|------|');
+	});
+
+	it('gives a notice on an empty cell and leaves the staff alone', () => {
+		const state = tabState(DOC, 1, 2);
+		const result = applyAction(state, bend, DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/fret first/);
+		expect(result.spec).toBeUndefined();
+	});
+});
+
 describe('toggleRepeat', () => {
 	it('repeats the current measure and keeps the cursor on its cell', () => {
 		const state = run(tabState(DOC, 1, 2), 'toggleRepeat');

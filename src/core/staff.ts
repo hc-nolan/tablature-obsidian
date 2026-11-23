@@ -127,13 +127,15 @@ export interface LineEdit {
 
 const MAX_BEATS = 128;
 const FILLER = '-';
-const CONTENT_WIDTH = 2;
 const TENS_DIGIT = /^[12]$/;
 
+/** Writes `content` over the whole cell, clearing any slide or bend left from the fret it replaces. */
 export function cellEdit(staff: Staff, stringRow: number, pos: Pos, content: string): LineEdit {
 	const from = posToCol(staff, pos);
-	return { row: staff.top + stringRow, from, to: from + CONTENT_WIDTH, insert: content.padEnd(CONTENT_WIDTH, FILLER) };
+	return { row: staff.top + stringRow, from, to: from + BEAT_WIDTH, insert: content.padEnd(BEAT_WIDTH, FILLER) };
 }
+
+const TECHNIQUE = /^[/\\b]$/;
 
 export function writeFret(
 	staff: Staff,
@@ -142,16 +144,49 @@ export function writeFret(
 	digit: string,
 	pending: boolean,
 ): { edit: LineEdit; pending: boolean } {
-	const existing = (staff.rows[stringRow] as string)[posToCol(staff, pos)] ?? '';
-	if (pending && TENS_DIGIT.test(existing)) {
+	const from = posToCol(staff, pos);
+	const cell = (staff.rows[stringRow] as string).slice(from, from + BEAT_WIDTH);
+	// A single-digit fret leaves room for its slide or bend target: 7b9.
+	if (/^\d$/.test(cell[0] ?? '') && TECHNIQUE.test(cell[1] ?? '') && cell[2] === FILLER) {
+		return { edit: { row: staff.top + stringRow, from: from + 2, to: from + 3, insert: digit }, pending: false };
+	}
+	const existing = cell[0] ?? '';
+	if (pending && TENS_DIGIT.test(existing) && cell[1] === FILLER) {
 		return { edit: cellEdit(staff, stringRow, pos, existing + digit), pending: false };
 	}
 	// Frets run into the 10s and 20s, so only a 1 or 2 can start a double-digit fret.
 	return { edit: cellEdit(staff, stringRow, pos, digit), pending: TENS_DIGIT.test(digit) };
 }
 
+/** Clears the fret and its technique, which means nothing without a note. */
 export function clearCell(staff: Staff, stringRow: number, pos: Pos): LineEdit {
-	return cellEdit(staff, stringRow, pos, '');
+	const from = posToCol(staff, pos);
+	return { row: staff.top + stringRow, from, to: from + BEAT_WIDTH, insert: FILLER.repeat(BEAT_WIDTH) };
+}
+
+/**
+ * Slide up, slide down, or bend. It follows the fret in the same cell, so it takes no extra beat. A single-digit fret
+ * has room for the target (7b9); a double-digit one doesn't (13b).
+ */
+export type Technique = '/' | '\\' | 'b';
+
+export type TechniqueResult = { ok: true; edit: LineEdit } | { ok: false; problem: string };
+
+/** Marks the cell's fret with `technique`, or removes it (and its target) if it's already marked. */
+export function toggleTechnique(staff: Staff, stringRow: number, pos: Pos, technique: Technique): TechniqueResult {
+	const from = posToCol(staff, pos);
+	const cell = (staff.rows[stringRow] as string).slice(from, from + BEAT_WIDTH);
+	const fret = /^\d{1,2}/.exec(cell)?.[0];
+	if (!fret) return { ok: false, problem: 'Write a fret first, then add a slide or bend to it.' };
+	const at = from + fret.length;
+	const edit = (insert: string): TechniqueResult => ({
+		ok: true,
+		edit: { row: staff.top + stringRow, from: at, to: from + BEAT_WIDTH, insert },
+	});
+	const mark = cell[fret.length];
+	if (mark === technique) return edit(FILLER.repeat(BEAT_WIDTH - fret.length));
+	// Switching between slide and bend keeps the target.
+	return edit(technique + cell.slice(fret.length + 1).replace(/\D/g, FILLER));
 }
 
 /** Resizes every measure of the staff to `beats`, padding with filler or dropping trailing beats. */

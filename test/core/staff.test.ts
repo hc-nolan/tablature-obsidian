@@ -17,6 +17,7 @@ import {
 	deleteMeasures,
 	repeatSpans,
 	toggleRepeat,
+	toggleTechnique,
 	type Staff,
 	staffLabelsLowToHigh,
 	writeFret,
@@ -192,6 +193,18 @@ describe('writeFret', () => {
 		expect(pending).toBe(false);
 	});
 
+	it.each(['b', '/', '\\'])('writes the target after a single-digit fret marked %s', (mark) => {
+		const row = `e|7${mark}-------|`;
+		const { edit, pending } = writeFret(on(row), 0, pos, '9', true);
+		expect(apply([row], [edit])[0]).toBe(`e|7${mark}9------|`);
+		expect(pending).toBe(false);
+	});
+
+	it.each(['e|7b9------|', 'e|13b------|'])('replaces a marked fret that has no room for a target: %s', (row) => {
+		const { edit } = writeFret(on(row), 0, pos, '5', false);
+		expect(apply([row], [edit])[0]).toBe('e|5--------|');
+	});
+
 	it('targets the given string and beat, offset by the staff top', () => {
 		const staff = parsed(['e|---------|', 'B|---------|'], 20);
 		const { edit } = writeFret(staff, 1, { measure: 0, beat: 1 }, '9', false);
@@ -208,9 +221,9 @@ describe('clearCell', () => {
 		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|---------|');
 	});
 
-	it('keeps the third character of the cell', () => {
-		const rows = ['e|12h------|', 'B|---------|'];
-		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|--h------|');
+	it('clears a slide or bend along with the fret', () => {
+		const rows = ['e|12b------|', 'B|---------|'];
+		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|---------|');
 	});
 });
 
@@ -520,5 +533,45 @@ describe('repeats', () => {
 	it('copies repeat marks onto added strings', () => {
 		const rows = ['B|:-1-:|', 'G|:---:|'];
 		expect(restrungText(rows, ['G', 'B', 'e'])).toEqual(['e|:---:|', 'B|:-1-:|', 'G|:---:|']);
+	});
+});
+
+describe('toggleTechnique', () => {
+	const pos = { measure: 0, beat: 0 };
+	const rows = (row: string): string[] => [row, 'B|------|'];
+	const toggled = (row: string, technique: '/' | '\\' | 'b', at = pos): string | { problem: string } => {
+		const result = toggleTechnique(parsed(rows(row)), 0, at, technique);
+		return result.ok ? (apply(rows(row), [result.edit])[0] as string) : { problem: result.problem };
+	};
+
+	it.each<['/' | '\\' | 'b', string]>([
+		['/', 'e|5/-7--|'],
+		['\\', 'e|5\\-7--|'],
+		['b', 'e|5b-7--|'],
+	])('marks a single-digit fret with %s, leaving room for the target', (technique, expected) => {
+		expect(toggled('e|5--7--|', technique)).toBe(expected);
+	});
+
+	it('marks a double-digit fret in the same cell', () => {
+		expect(toggled('e|13-15-|', 'b')).toBe('e|13b15-|');
+	});
+
+	it('removes the mark and its target when pressed again', () => {
+		expect(toggled('e|7b9---|', 'b')).toBe('e|7-----|');
+		expect(toggled('e|13b---|', 'b')).toBe('e|13----|');
+	});
+
+	it('switches to a different mark, keeping the target', () => {
+		expect(toggled('e|5/7---|', '\\')).toBe('e|5\\7---|');
+		expect(toggled('e|13b---|', '/')).toBe('e|13/---|');
+	});
+
+	it('targets the given beat', () => {
+		expect(toggled('e|5--7--|', '/', { measure: 0, beat: 1 })).toBe('e|5--7/-|');
+	});
+
+	it('needs a fret on the cell', () => {
+		expect(toggled('e|------|', '/')).toMatchObject({ problem: 'Write a fret first, then add a slide or bend to it.' });
+		expect(toggled('e|x-----|', 'b')).toMatchObject({ problem: 'Write a fret first, then add a slide or bend to it.' });
 	});
 });

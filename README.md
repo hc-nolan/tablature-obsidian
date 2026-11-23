@@ -47,7 +47,8 @@ E|------------|------------|
 | `H` or `{`, `L` or `}` | First beat of the previous or next measure |
 | `j` or `↓`, `k` or `↑` | Next or previous string, continuing into the next or previous staff |
 | `0`–`9` | Write a fret. A `1` or `2` followed by another digit makes a double-digit fret |
-| `Space` | Clear the cell |
+| `/`, `\`, `b` | Slide up, slide down or bend from the fret. It shares the fret's beat, so it adds no time. After a single-digit fret, the next digit is the target: `7b9`, `5/7`. A double-digit fret has no room, so it's just marked: `13b`. Press again to remove it |
+| `Space` | Clear the cell, including any slide or bend |
 | `Backspace` | Clear the previous cell and move onto it |
 | `T` | Change the staff's tuning |
 | `B` | Set the number of beats in every measure of the staff |

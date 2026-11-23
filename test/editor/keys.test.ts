@@ -81,6 +81,11 @@ describe('resolveKey in tab mode', () => {
 		expect(resolveKey('tab', input(digit))).toEqual({ kind: 'action', action: { type: 'digit', digit } });
 	});
 
+	it.each(['/', '\\', 'b'])('%s marks a slide or bend', (technique) => {
+		expect(resolveKey('tab', input(technique))).toEqual({ kind: 'action', action: { type: 'technique', technique } });
+		expect(resolveKey('chord', input(technique))).toEqual({ kind: 'swallow' });
+	});
+
 	it('swallows keys it does not use', () => {
 		expect(resolveKey('tab', input('z'))).toEqual({ kind: 'swallow' });
 		expect(resolveKey('tab', input('Enter'))).toEqual({ kind: 'swallow' });

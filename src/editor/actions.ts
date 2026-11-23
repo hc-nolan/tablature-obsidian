@@ -20,7 +20,9 @@ import {
 	restring,
 	setStaffBeats,
 	type Staff,
+	type Technique,
 	staffLabelsLowToHigh,
+	toggleTechnique,
 	toggleRepeat,
 	writeFret,
 } from '../core/staff';
@@ -64,6 +66,7 @@ export type Action =
 				| 'exit';
 	  }
 	| { type: 'digit'; digit: string }
+	| { type: 'technique'; technique: Technique }
 	| { type: 'nextShape' | 'prevShape' | 'rootUp' | 'rootDown' | 'writeChord' };
 
 export type PickerRequest =
@@ -319,6 +322,11 @@ export function applyAction(
 		case 'digit': {
 			const { edit, pending } = writeFret(staff, row, pos, action.digit, mode.pending);
 			return editSpec(state, mode, staff, [edit], row, pos, pending);
+		}
+		case 'technique': {
+			const result = toggleTechnique(staff, row, pos, action.technique);
+			if (!result.ok) return { notice: result.problem };
+			return editSpec(state, mode, staff, [result.edit], row, pos, false);
 		}
 		case 'clear':
 			return editSpec(state, mode, staff, clearEdits(mode, staff, row, pos), row, pos, false);

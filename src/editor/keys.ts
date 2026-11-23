@@ -3,6 +3,7 @@
 import type { EditorState, Extension } from '@codemirror/state';
 import { EditorView, ViewPlugin } from '@codemirror/view';
 import type { Config, Tuning } from '../core/config';
+import type { Technique } from '../core/staff';
 import { type Action, type ActionResult, applyAction, applyBeats, applyTuning, enterChord, type PickerRequest } from './actions';
 import { modeField, OFF, setMode } from './mode';
 
@@ -64,6 +65,8 @@ const TAB_KEYS: Record<string, Action['type']> = {
 	':': 'toggleRepeat',
 };
 
+const TECHNIQUES: Technique[] = ['/', '\\', 'b'];
+
 const CHORD_KEYS: Record<string, Action['type']> = {
 	...MOVEMENT,
 	Tab: 'nextShape',
@@ -91,6 +94,9 @@ export function resolveKey(mode: 'tab' | 'chord', input: KeyInput): KeyResult {
 	if (!input.altGraph && !optionTyped && (input.ctrl || input.meta || input.alt)) return { kind: 'pass' };
 
 	if (mode === 'tab' && /^\d$/.test(input.key)) return { kind: 'action', action: { type: 'digit', digit: input.key } };
+	if (mode === 'tab' && TECHNIQUES.includes(input.key as Technique)) {
+		return { kind: 'action', action: { type: 'technique', technique: input.key as Technique } };
+	}
 	if (mode === 'tab' && input.shift && input.key === 'ArrowLeft') return { kind: 'action', action: { type: 'selectPrevMeasure' } };
 	if (mode === 'tab' && input.shift && input.key === 'ArrowRight') return { kind: 'action', action: { type: 'selectNextMeasure' } };
 	if (mode === 'chord' && input.key === 'Tab' && input.shift) return { kind: 'action', action: { type: 'prevShape' } };
