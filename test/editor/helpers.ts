@@ -3,6 +3,7 @@ import { EditorState } from '@codemirror/state';
 import { type Action, type ActionResult, applyAction, enterAt } from '../../src/editor/actions';
 import { DEFAULT_CONFIG, type Config } from '../../src/core/config';
 import { keysExpandedField, modeField, selectionFilter } from '../../src/editor/mode';
+import type { ElementFactory } from '../../src/editor/decorations';
 
 export const STAFF = ['e|------|------|', 'B|------|------|'];
 export const DOC = ['```tab', ...STAFF, '```'];
@@ -56,3 +57,11 @@ export function cursor(state: EditorState): { row: number; col: number } {
 export function lines(state: EditorState): string[] {
 	return state.doc.toJSON();
 }
+
+/** Plain-DOM element factory for the decoration widgets (the host's job in real use). */
+export const domEl: ElementFactory = (tag, cls, text) => {
+	const node = document.createElement(tag);
+	if (cls) node.className = cls;
+	if (text !== undefined) node.textContent = text;
+	return node;
+};

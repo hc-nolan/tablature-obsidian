@@ -10,23 +10,22 @@ import { currentStaff, keysExpanded, modeField, selectedMeasures } from './mode'
 
 const FILLER = '-';
 
-/** A plain element, so this file needs no host framework (Obsidian's `createEl`, Vue, …). */
-function el<K extends keyof HTMLElementTagNameMap>(
+/**
+ * Creates an element with an optional class and text. The host supplies it (Obsidian's `createEl`,
+ * plain DOM elsewhere), so this file depends on no host framework.
+ */
+export type ElementFactory = <K extends keyof HTMLElementTagNameMap>(
 	tag: K,
 	cls?: string,
 	text?: string,
-): HTMLElementTagNameMap[K] {
-	const node = document.createElement(tag);
-	if (cls) node.className = cls;
-	if (text !== undefined) node.textContent = text;
-	return node;
-}
+) => HTMLElementTagNameMap[K];
 
 class TextWidget extends WidgetType {
 	constructor(
 		readonly text: string,
 		private readonly className: string,
 		private readonly tag: 'div' | 'span',
+		private readonly el: ElementFactory,
 	) {
 		super();
 	}
@@ -36,7 +35,7 @@ class TextWidget extends WidgetType {
 	}
 
 	override toDOM(): HTMLElement {
-		return el(this.tag, this.className, this.text);
+		return this.el(this.tag, this.className, this.text);
 	}
 }
 
@@ -127,7 +126,10 @@ export function legendText(state: EditorState, isMac = false): string {
 class LegendWidget extends WidgetType {
 	readonly text: string;
 
-	constructor(readonly value: Legend) {
+	constructor(
+		readonly value: Legend,
+		private readonly el: ElementFactory,
+	) {
 		super();
 		this.text = legendLines(value);
 	}
@@ -142,8 +144,8 @@ class LegendWidget extends WidgetType {
 			tag: K,
 			cls?: string,
 			text?: string,
-		) => parent.appendChild(el(tag, cls, text));
-		const root = el('div', 'tablature-legend');
+		) => parent.appendChild(this.el(tag, cls, text));
+		const root = this.el('div', 'tablature-legend');
 		if (this.value.status) add(root, 'div', 'tablature-legend-status', this.value.status);
 		for (const { group, keys } of this.value.rows) {
 			const row = add(root, 'div', 'tablature-legend-row');
@@ -158,7 +160,12 @@ class LegendWidget extends WidgetType {
 	}
 }
 
-export function buildDecorations(state: EditorState, config: Config, isMac = false): DecorationSet {
+export function buildDecorations(
+	state: EditorState,
+	config: Config,
+	el: ElementFactory,
+	isMac = false,
+): DecorationSet {
 	const mode = state.field(modeField);
 	const info = currentStaff(state);
 	if (mode.kind === 'off' || !info) return Decoration.none;
@@ -173,7 +180,7 @@ export function buildDecorations(state: EditorState, config: Config, isMac = fal
 
 	ranges.push(
 		Decoration.widget({
-			widget: new TextWidget(indicatorText(staff, pos, tuningName), 'tablature-indicator', 'div'),
+			widget: new TextWidget(indicatorText(staff, pos, tuningName), 'tablature-indicator', 'div', el),
 			block: true,
 			side: -1,
 		}).range(rowFrom(0)),
@@ -197,7 +204,7 @@ export function buildDecorations(state: EditorState, config: Config, isMac = fal
 			const from = rowFrom(row) + col;
 			const text = (voicing[count - 1 - row] as string).padEnd(BEAT_WIDTH, FILLER);
 			ranges.push(
-				Decoration.replace({ widget: new TextWidget(text, 'tablature-preview', 'span') }).range(
+				Decoration.replace({ widget: new TextWidget(text, 'tablature-preview', 'span', el) }).range(
 					from,
 					from + BEAT_WIDTH,
 				),
@@ -207,7 +214,7 @@ export function buildDecorations(state: EditorState, config: Config, isMac = fal
 
 	ranges.push(
 		Decoration.widget({
-			widget: new LegendWidget(legend(state, isMac)),
+			widget: new LegendWidget(legend(state, isMac), el),
 			block: true,
 			side: 1,
 		}).range(state.doc.line(staff.top + count).to),
@@ -216,15 +223,19 @@ export function buildDecorations(state: EditorState, config: Config, isMac = fal
 	return Decoration.set(ranges, true);
 }
 
-export function decorationsExtension(getConfig: () => Config, isMac = false): Extension {
+export function decorationsExtension(
+	getConfig: () => Config,
+	el: ElementFactory,
+	isMac = false,
+): Extension {
 	return StateField.define<DecorationSet>({
-		create: (state) => buildDecorations(state, getConfig(), isMac),
+		create: (state) => buildDecorations(state, getConfig(), el, isMac),
 		update: (value, tr) =>
 			tr.docChanged ||
 			tr.selection ||
 			tr.startState.field(modeField, false) !== tr.state.field(modeField) ||
 			keysExpanded(tr.startState) !== keysExpanded(tr.state)
-				? buildDecorations(tr.state, getConfig(), isMac)
+				? buildDecorations(tr.state, getConfig(), el, isMac)
 				: value,
 		provide: (field) => EditorView.decorations.from(field),
 	});

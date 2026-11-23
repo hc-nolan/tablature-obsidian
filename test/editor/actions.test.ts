@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG } from '../../src/core/config';
 import { type Action, applyAction, applyBeats, applyTuning, enterAt, enterChord, insertStaff } from '../../src/editor/actions';
 import { buildDecorations } from '../../src/editor/decorations';
 import { currentStaff, modeField } from '../../src/editor/mode';
-import { applyResult, cursor, digits, DOC, lines, makeState, run, runUndo, STAFF, tabState } from './helpers';
+import { applyResult, cursor, digits, DOC, domEl, lines, makeState, run, runUndo, STAFF, tabState } from './helpers';
 
 const STD_ROWS = ['e', 'B', 'G', 'D', 'A', 'E'].map((label) => `${label}|---|`);
 
@@ -530,7 +530,7 @@ describe('chord mode', () => {
 			const next = start.update({ changes: { from: start.doc.line(3).from, insert: ROW } }).state;
 			expect(next.field(modeField).kind).toBe('tab');
 			expect(chord(next)).toBeNull();
-			expect(() => buildDecorations(next, config)).not.toThrow();
+			expect(() => buildDecorations(next, config, domEl)).not.toThrow();
 		});
 
 		it('falls back to tab mode when a row is removed', () => {
