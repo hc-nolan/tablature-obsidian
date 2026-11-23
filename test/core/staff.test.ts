@@ -154,28 +154,40 @@ describe('writeFret', () => {
 	const pos = { measure: 0, beat: 0 };
 	const on = (row: string) => parsed([row, 'B|---------|']);
 
-	it('writes a single digit and sets pending', () => {
-		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, '5', false);
-		expect(apply(['e|---------|'], [edit])[0]).toBe('e|5--------|');
+	it.each(['1', '2'])('writes a single %s and sets pending', (digit) => {
+		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, digit, false);
+		expect(apply(['e|---------|'], [edit])[0]).toBe(`e|${digit}--------|`);
 		expect(pending).toBe(true);
 	});
 
-	it('makes a double-digit fret when pending and clears pending', () => {
-		const { edit, pending } = writeFret(on('e|5--------|'), 0, pos, '2', true);
-		expect(apply(['e|5--------|'], [edit])[0]).toBe('e|52-------|');
+	it.each(['0', '3', '5', '9'])('writes a single %s without setting pending', (digit) => {
+		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, digit, false);
+		expect(apply(['e|---------|'], [edit])[0]).toBe(`e|${digit}--------|`);
 		expect(pending).toBe(false);
 	});
 
+	it('makes a double-digit fret when pending and clears pending', () => {
+		const { edit, pending } = writeFret(on('e|2--------|'), 0, pos, '4', true);
+		expect(apply(['e|2--------|'], [edit])[0]).toBe('e|24-------|');
+		expect(pending).toBe(false);
+	});
+
+	it('replaces a digit other than 1 or 2 even when pending', () => {
+		const { edit, pending } = writeFret(on('e|5--------|'), 0, pos, '2', true);
+		expect(apply(['e|5--------|'], [edit])[0]).toBe('e|2--------|');
+		expect(pending).toBe(true);
+	});
+
 	it('overwrites a double-digit fret when not pending', () => {
-		const { edit, pending } = writeFret(on('e|52-------|'), 0, pos, '3', false);
-		expect(apply(['e|52-------|'], [edit])[0]).toBe('e|3--------|');
+		const { edit, pending } = writeFret(on('e|12-------|'), 0, pos, '1', false);
+		expect(apply(['e|12-------|'], [edit])[0]).toBe('e|1--------|');
 		expect(pending).toBe(true);
 	});
 
 	it('treats pending on a non-digit cell as a fresh write', () => {
 		const { edit, pending } = writeFret(on('e|-x-------|'), 0, pos, '7', true);
 		expect(apply(['e|-x-------|'], [edit])[0]).toBe('e|7--------|');
-		expect(pending).toBe(true);
+		expect(pending).toBe(false);
 	});
 
 	it('targets the given string and beat, offset by the staff top', () => {

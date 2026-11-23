@@ -99,6 +99,7 @@ export interface LineEdit {
 const MAX_BEATS = 128;
 const FILLER = '-';
 const CONTENT_WIDTH = 2;
+const TENS_DIGIT = /^[12]$/;
 
 export function cellEdit(staff: Staff, stringRow: number, pos: Pos, content: string): LineEdit {
 	const from = posToCol(staff, pos);
@@ -113,10 +114,11 @@ export function writeFret(
 	pending: boolean,
 ): { edit: LineEdit; pending: boolean } {
 	const existing = (staff.rows[stringRow] as string)[posToCol(staff, pos)] ?? '';
-	if (pending && /\d/.test(existing)) {
+	if (pending && TENS_DIGIT.test(existing)) {
 		return { edit: cellEdit(staff, stringRow, pos, existing + digit), pending: false };
 	}
-	return { edit: cellEdit(staff, stringRow, pos, digit), pending: true };
+	// Frets run into the 10s and 20s, so only a 1 or 2 can start a double-digit fret.
+	return { edit: cellEdit(staff, stringRow, pos, digit), pending: TENS_DIGIT.test(digit) };
 }
 
 export function clearCell(staff: Staff, stringRow: number, pos: Pos): LineEdit {

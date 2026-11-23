@@ -44,7 +44,7 @@ E|------------|------------|
 | `h` or `←`, `l` or `→` | Previous or next beat |
 | `H` or `{`, `L` or `}` | First beat of the previous or next measure |
 | `j` or `↓`, `k` or `↑` | Next or previous string, continuing into the next or previous staff |
-| `0`–`9` | Write a fret. Two digits in a row make a double-digit fret |
+| `0`–`9` | Write a fret. A `1` or `2` followed by another digit makes a double-digit fret |
 | `Space` | Clear the cell |
 | `Backspace` | Clear the previous cell and move onto it |
 | `T` | Change the staff's tuning |

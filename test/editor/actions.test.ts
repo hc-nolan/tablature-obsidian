@@ -159,6 +159,14 @@ describe('writing', () => {
 		expect(lines(digits(moved, '2'))[1]).toBe('e|2-----|------|');
 	});
 
+	it.each(['24', '20'])('builds the double-digit fret %s', (fret) => {
+		expect(lines(digits(tabState(DOC, 1, 2), fret))[1]).toBe(`e|${fret}----|------|`);
+	});
+
+	it.each(['0', '3', '4', '9'])('replaces a single %s with the next digit', (first) => {
+		expect(lines(digits(tabState(DOC, 1, 2), `${first}5`))[1]).toBe('e|5-----|------|');
+	});
+
 	it('restarts on a third digit', () => {
 		expect(lines(digits(tabState(DOC, 1, 2), '123'))[1]).toBe('e|3-----|------|');
 	});
