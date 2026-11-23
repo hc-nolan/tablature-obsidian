@@ -159,6 +159,14 @@ describe('writing', () => {
 		expect(lines(digits(moved, '2'))[1]).toBe('e|2-----|------|');
 	});
 
+	it.each(['24', '20'])('builds the double-digit fret %s', (fret) => {
+		expect(lines(digits(tabState(DOC, 1, 2), fret))[1]).toBe(`e|${fret}----|------|`);
+	});
+
+	it.each(['0', '3', '4', '9'])('replaces a single %s with the next digit', (first) => {
+		expect(lines(digits(tabState(DOC, 1, 2), `${first}5`))[1]).toBe('e|5-----|------|');
+	});
+
 	it('restarts on a third digit', () => {
 		expect(lines(digits(tabState(DOC, 1, 2), '123'))[1]).toBe('e|3-----|------|');
 	});
@@ -312,6 +320,53 @@ describe('copy and paste', () => {
 	});
 });
 
+describe('technique', () => {
+	const bend = { type: 'technique', technique: 'b' } as const;
+
+	it('writes a quick bend and its target in one cell', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '7'), bend);
+		expect(lines(digits(bent, '9'))[1]).toBe('e|7b9---|------|');
+		expect(cursor(bent)).toEqual({ row: 1, col: 2 });
+	});
+
+	it('marks a double-digit fret without a target', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '13'), bend);
+		expect(lines(bent)[1]).toBe('e|13b---|------|');
+		expect(lines(digits(bent, '5'))[1]).toBe('e|5-----|------|');
+	});
+
+	it('ends a pending double-digit fret, so the next digit is the target', () => {
+		const bent = run(digits(tabState(DOC, 1, 2), '1'), bend);
+		expect(lines(digits(bent, '3'))[1]).toBe('e|1b3---|------|');
+	});
+
+	it('gives a notice on an empty cell and leaves the staff alone', () => {
+		const state = tabState(DOC, 1, 2);
+		const result = applyAction(state, bend, DEFAULT_CONFIG);
+		expect(result.notice).toMatch(/fret first/);
+		expect(result.spec).toBeUndefined();
+	});
+});
+
+describe('toggleRepeat', () => {
+	it('repeats the current measure and keeps the cursor on its cell', () => {
+		const state = run(tabState(DOC, 1, 2), 'toggleRepeat');
+		expect(lines(state).slice(1, 3)).toEqual(['e|:------:|------|', 'B|:------:|------|']);
+		expect(cursor(state)).toEqual({ row: 1, col: 3 });
+	});
+
+	it('repeats the selected measures', () => {
+		const selected = run(run(tabState(DOC, 1, 2), 'toggleSelect'), 'nextMeasure');
+		expect(lines(run(selected, 'toggleRepeat'))[1]).toBe('e|:------|------:|');
+	});
+
+	it('removes the repeat on a second press, in one undo step each', () => {
+		const once = run(tabState(DOC, 1, 2), 'toggleRepeat');
+		expect(lines(run(once, 'toggleRepeat'))).toEqual(DOC);
+		expect(lines(runUndo(once))).toEqual(DOC);
+	});
+});
+
 describe('applyTuning', () => {
 	it('relabels and keeps the same position when labels get wider', () => {
 		const start = tabState(DOC, 1, 5);
@@ -429,6 +484,26 @@ describe('chord mode', () => {
 	it('writes x for a muted string', () => {
 		const state = runC(chordState('Gamma'), 'writeChord');
 		expect(lines(state).slice(1, 3)).toEqual(['e|---3--|------|', 'B|---x--|------|']);
+	});
+
+	it('clears every string on the beat and stays in chord mode', () => {
+		const state = runC(runC(chordState(), 'writeChord'), 'clear');
+		expect(lines(state)).toEqual(DOC);
+		expect(state.field(modeField).kind).toBe('chord');
+		expect(cursor(state)).toEqual({ row: 1, col: 5 });
+	});
+
+	it('clears every string on the previous beat and moves onto it', () => {
+		const written = runC(runC(chordState(), 'writeChord'), 'right');
+		const state = runC(written, 'clearLeft');
+		expect(lines(state)).toEqual(DOC);
+		expect(cursor(state)).toEqual({ row: 1, col: 5 });
+		expect(state.field(modeField).kind).toBe('chord');
+	});
+
+	it('still clears a single cell in tab mode', () => {
+		const written = runC(runC(chordState(), 'writeChord'), 'exit');
+		expect(lines(run(written, 'clear')).slice(1, 3)).toEqual(['e|------|------|', 'B|---0--|------|']);
 	});
 
 	it('undoes a whole chord in one step', () => {

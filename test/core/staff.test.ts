@@ -15,6 +15,9 @@ import {
 	copyMeasures,
 	pasteMeasures,
 	deleteMeasures,
+	repeatSpans,
+	toggleRepeat,
+	toggleTechnique,
 	type Staff,
 	staffLabelsLowToHigh,
 	writeFret,
@@ -51,8 +54,8 @@ describe('parseStaff', () => {
 		const staff = parsed(MIXED, 10);
 		expect(staff.top).toBe(10);
 		expect(staff.measures).toEqual([
-			{ start: 2, beats: 2 },
-			{ start: 9, beats: 1 },
+			{ start: 2, beats: 2, repeatStart: false, repeatEnd: false },
+			{ start: 9, beats: 1, repeatStart: false, repeatEnd: false },
 		]);
 	});
 
@@ -154,28 +157,52 @@ describe('writeFret', () => {
 	const pos = { measure: 0, beat: 0 };
 	const on = (row: string) => parsed([row, 'B|---------|']);
 
-	it('writes a single digit and sets pending', () => {
-		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, '5', false);
-		expect(apply(['e|---------|'], [edit])[0]).toBe('e|5--------|');
+	it.each(['1', '2'])('writes a single %s and sets pending', (digit) => {
+		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, digit, false);
+		expect(apply(['e|---------|'], [edit])[0]).toBe(`e|${digit}--------|`);
 		expect(pending).toBe(true);
 	});
 
-	it('makes a double-digit fret when pending and clears pending', () => {
-		const { edit, pending } = writeFret(on('e|5--------|'), 0, pos, '2', true);
-		expect(apply(['e|5--------|'], [edit])[0]).toBe('e|52-------|');
+	it.each(['0', '3', '5', '9'])('writes a single %s without setting pending', (digit) => {
+		const { edit, pending } = writeFret(on('e|---------|'), 0, pos, digit, false);
+		expect(apply(['e|---------|'], [edit])[0]).toBe(`e|${digit}--------|`);
 		expect(pending).toBe(false);
 	});
 
+	it('makes a double-digit fret when pending and clears pending', () => {
+		const { edit, pending } = writeFret(on('e|2--------|'), 0, pos, '4', true);
+		expect(apply(['e|2--------|'], [edit])[0]).toBe('e|24-------|');
+		expect(pending).toBe(false);
+	});
+
+	it('replaces a digit other than 1 or 2 even when pending', () => {
+		const { edit, pending } = writeFret(on('e|5--------|'), 0, pos, '2', true);
+		expect(apply(['e|5--------|'], [edit])[0]).toBe('e|2--------|');
+		expect(pending).toBe(true);
+	});
+
 	it('overwrites a double-digit fret when not pending', () => {
-		const { edit, pending } = writeFret(on('e|52-------|'), 0, pos, '3', false);
-		expect(apply(['e|52-------|'], [edit])[0]).toBe('e|3--------|');
+		const { edit, pending } = writeFret(on('e|12-------|'), 0, pos, '1', false);
+		expect(apply(['e|12-------|'], [edit])[0]).toBe('e|1--------|');
 		expect(pending).toBe(true);
 	});
 
 	it('treats pending on a non-digit cell as a fresh write', () => {
 		const { edit, pending } = writeFret(on('e|-x-------|'), 0, pos, '7', true);
 		expect(apply(['e|-x-------|'], [edit])[0]).toBe('e|7--------|');
-		expect(pending).toBe(true);
+		expect(pending).toBe(false);
+	});
+
+	it.each(['b', '/', '\\'])('writes the target after a single-digit fret marked %s', (mark) => {
+		const row = `e|7${mark}-------|`;
+		const { edit, pending } = writeFret(on(row), 0, pos, '9', true);
+		expect(apply([row], [edit])[0]).toBe(`e|7${mark}9------|`);
+		expect(pending).toBe(false);
+	});
+
+	it.each(['e|7b9------|', 'e|13b------|'])('replaces a marked fret that has no room for a target: %s', (row) => {
+		const { edit } = writeFret(on(row), 0, pos, '5', false);
+		expect(apply([row], [edit])[0]).toBe('e|5--------|');
 	});
 
 	it('targets the given string and beat, offset by the staff top', () => {
@@ -194,9 +221,9 @@ describe('clearCell', () => {
 		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|---------|');
 	});
 
-	it('keeps the third character of the cell', () => {
-		const rows = ['e|12h------|', 'B|---------|'];
-		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|--h------|');
+	it('clears a slide or bend along with the fret', () => {
+		const rows = ['e|12b------|', 'B|---------|'];
+		expect(apply(rows, [clearCell(parsed(rows), 0, pos)])[0]).toBe('e|---------|');
 	});
 });
 
@@ -384,5 +411,167 @@ describe('parseBeatCount', () => {
 		['129', null],
 	])('%j → %s', (text, expected) => {
 		expect(parseBeatCount(text)).toBe(expected);
+	});
+});
+
+describe('repeats', () => {
+	const PLAIN = ['e|---|---|---|', 'B|---|---|---|'];
+	const REPEATED = ['e|---|:---:|---|', 'B|---|:---:|---|'];
+	// Edits from one call share the original columns, so apply each row's right to left.
+	const applyAll = (rows: string[], edits: LineEdit[]): string[] =>
+		apply(rows, [...edits].sort((a, b) => a.row - b.row || b.from - a.from));
+	const toggled = (rows: string[], from: number, to: number): string[] =>
+		applyAll(rows, toggleRepeat(parsed(rows), from, to));
+	const restrungText = (rows: string[], labels: string[]): string[] => {
+		const result = restring(parsed(rows), labels);
+		if (!result.ok) throw new Error(result.problem);
+		const text = rows.join('\n');
+		return (text.slice(0, result.edit.from) + result.edit.insert + text.slice(result.edit.to)).split('\n');
+	};
+
+	it('reads repeat bars without changing measure widths', () => {
+		const staff = parsed(['e|:---|---:|:---:|', 'B|:---|---:|:---:|']);
+		expect(staff.measures).toEqual([
+			{ start: 3, beats: 1, repeatStart: true, repeatEnd: false },
+			{ start: 7, beats: 1, repeatStart: false, repeatEnd: true },
+			{ start: 13, beats: 1, repeatStart: true, repeatEnd: true },
+		]);
+	});
+
+	it('maps columns to cells inside repeat bars', () => {
+		const staff = parsed(REPEATED);
+		expect(posToCol(staff, { measure: 1, beat: 0 })).toBe(7);
+		expect(colToPos(staff, 6)).toEqual({ measure: 1, beat: 0 });
+	});
+
+	it("rejects repeat marks that don't line up", () => {
+		const result = parseStaff(['e|---|:---|', 'B|---|---|'], 0);
+		expect(result.ok).toBe(false);
+	});
+
+	it('rejects a measure with only colons in it', () => {
+		expect(parseStaff(['e|:|', 'B|:|'], 0).ok).toBe(false);
+	});
+
+	it('adds a repeat around one measure', () => {
+		expect(toggled(PLAIN, 1, 1)).toEqual(REPEATED);
+	});
+
+	it('adds a repeat around a range, including the staff ends', () => {
+		expect(toggled(PLAIN, 0, 2)).toEqual(['e|:---|---|---:|', 'B|:---|---|---:|']);
+	});
+
+	it('removes a repeat that is already there', () => {
+		expect(toggled(REPEATED, 1, 1)).toEqual(PLAIN);
+	});
+
+	it('completes a half-written repeat instead of removing it', () => {
+		expect(toggled(['e|---|:---|---|', 'B|---|:---|---|'], 1, 1)).toEqual(REPEATED);
+	});
+
+	it('replaces a wider repeat when repeating part of it', () => {
+		const wide = toggled(PLAIN, 0, 1);
+		expect(wide[0]).toBe('e|:---|---:|---|');
+		const narrow = toggled(wide, 0, 0);
+		expect(narrow[0]).toBe('e|:---:|---|---|');
+		expect(toggled(narrow, 0, 0)).toEqual(PLAIN);
+	});
+
+	it('replaces a repeat that the new one overlaps', () => {
+		expect(toggled(['e|:---|---:|---|', 'B|:---|---:|---|'], 1, 2)[0]).toBe('e|---|:---|---:|');
+	});
+
+	it('replaces every repeat inside the new one', () => {
+		expect(toggled(['e|:---:|---|:---:|', 'B|:---:|---|:---:|'], 0, 2)[0]).toBe('e|:---|---|---:|');
+	});
+
+	it('leaves repeats it does not touch', () => {
+		expect(toggled(['e|:---:|---|---|', 'B|:---:|---|---|'], 2, 2)[0]).toBe('e|:---:|---|:---:|');
+	});
+
+	it('pairs a close with no open back to the start', () => {
+		expect(repeatSpans(parsed(['e|---|---:|---|', 'B|---|---:|---|']))).toEqual([{ from: 0, to: 1 }]);
+	});
+
+	it('keeps repeat bars when changing beats', () => {
+		const rows = ['e|-1-|:-2-:|-3-|', 'B|---|:---:|---|'];
+		expect(applyAll(rows, setStaffBeats(parsed(rows), 2))).toEqual([
+			'e|-1----|:-2----:|-3----|',
+			'B|------|:------:|------|',
+		]);
+	});
+
+	it('pastes after the closing repeat bar', () => {
+		const rows = ['e|:-1-:|:-2-:|', 'B|:---:|:---:|'];
+		const result = pasteMeasures(parsed(rows), 0, ['-9-', '---']);
+		expect(result.ok && applyAll(rows, result.edits)).toEqual(['e|:-1-:|-9-|:-2-:|', 'B|:---:|---|:---:|']);
+	});
+
+	it('keeps neighbouring repeats when deleting', () => {
+		const rows = ['e|-1-:|-2-|:-3-|', 'B|---:|---|:---|'];
+		const result = deleteMeasures(parsed(rows), 1, 1);
+		expect(result.ok && applyAll(rows, result.edits)).toEqual(['e|-1-:|:-3-|', 'B|---:|:---|']);
+	});
+
+	it("drops a deleted measure's own repeat marks", () => {
+		const rows = ['e|-1-|:-2-:|-3-|', 'B|---|:---:|---|'];
+		const result = deleteMeasures(parsed(rows), 1, 1);
+		expect(result.ok && applyAll(rows, result.edits)).toEqual(['e|-1-|-3-|', 'B|---|---|']);
+	});
+
+	it('deletes the first measure, keeping the next repeat', () => {
+		const rows = ['e|-1-|:-2-|', 'B|---|:---|'];
+		const result = deleteMeasures(parsed(rows), 0, 0);
+		expect(result.ok && applyAll(rows, result.edits)).toEqual(['e|:-2-|', 'B|:---|']);
+	});
+
+	it("doesn't count repeat marks as notes when removing strings", () => {
+		const rows = ['e|:---:|', 'B|:---:|', 'G|:-5-:|'];
+		expect(restrungText(rows, ['G', 'B'])).toEqual(['B|:---:|', 'G|:-5-:|']);
+	});
+
+	it('copies repeat marks onto added strings', () => {
+		const rows = ['B|:-1-:|', 'G|:---:|'];
+		expect(restrungText(rows, ['G', 'B', 'e'])).toEqual(['e|:---:|', 'B|:-1-:|', 'G|:---:|']);
+	});
+});
+
+describe('toggleTechnique', () => {
+	const pos = { measure: 0, beat: 0 };
+	const rows = (row: string): string[] => [row, 'B|------|'];
+	const toggled = (row: string, technique: '/' | '\\' | 'b', at = pos): string | { problem: string } => {
+		const result = toggleTechnique(parsed(rows(row)), 0, at, technique);
+		return result.ok ? (apply(rows(row), [result.edit])[0] as string) : { problem: result.problem };
+	};
+
+	it.each<['/' | '\\' | 'b', string]>([
+		['/', 'e|5/-7--|'],
+		['\\', 'e|5\\-7--|'],
+		['b', 'e|5b-7--|'],
+	])('marks a single-digit fret with %s, leaving room for the target', (technique, expected) => {
+		expect(toggled('e|5--7--|', technique)).toBe(expected);
+	});
+
+	it('marks a double-digit fret in the same cell', () => {
+		expect(toggled('e|13-15-|', 'b')).toBe('e|13b15-|');
+	});
+
+	it('removes the mark and its target when pressed again', () => {
+		expect(toggled('e|7b9---|', 'b')).toBe('e|7-----|');
+		expect(toggled('e|13b---|', 'b')).toBe('e|13----|');
+	});
+
+	it('switches to a different mark, keeping the target', () => {
+		expect(toggled('e|5/7---|', '\\')).toBe('e|5\\7---|');
+		expect(toggled('e|13b---|', '/')).toBe('e|13/---|');
+	});
+
+	it('targets the given beat', () => {
+		expect(toggled('e|5--7--|', '/', { measure: 0, beat: 1 })).toBe('e|5--7/-|');
+	});
+
+	it('needs a fret on the cell', () => {
+		expect(toggled('e|------|', '/')).toMatchObject({ problem: 'Write a fret first, then add a slide or bend to it.' });
+		expect(toggled('e|x-----|', 'b')).toMatchObject({ problem: 'Write a fret first, then add a slide or bend to it.' });
 	});
 });

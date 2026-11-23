@@ -33,6 +33,8 @@ E|------------|------------|
 - A staff is at least 2 consecutive lines. Each line has a label of 1 to 4 characters, then `|`, and ends with `|`.
 - Each beat is 3 characters wide, so every measure's width must be a multiple of 3.
 - The bars must line up on every row. If they don't, tab mode tells you what's wrong rather than editing the staff.
+- A repeat opens with `|:` and closes with `:|`, and `:|:` both closes one and opens the next. The colons belong to
+  the bar, so they don't count toward a measure's width.
 - Any other line, such as an annotation or a blank line, separates staves and is never changed.
 
 ## Keys
@@ -44,8 +46,9 @@ E|------------|------------|
 | `h` or `←`, `l` or `→` | Previous or next beat |
 | `H` or `{`, `L` or `}` | First beat of the previous or next measure |
 | `j` or `↓`, `k` or `↑` | Next or previous string, continuing into the next or previous staff |
-| `0`–`9` | Write a fret. Two digits in a row make a double-digit fret |
-| `Space` | Clear the cell |
+| `0`–`9` | Write a fret. A `1` or `2` followed by another digit makes a double-digit fret |
+| `/`, `\`, `b` | Slide up, slide down or bend from the fret. It shares the fret's beat, so it adds no time. After a single-digit fret, the next digit is the target: `7b9`, `5/7`. A double-digit fret has no room, so it's just marked: `13b`. Press again to remove it |
+| `Space` | Clear the cell, including any slide or bend |
 | `Backspace` | Clear the previous cell and move onto it |
 | `T` | Change the staff's tuning |
 | `B` | Set the number of beats in every measure of the staff |
@@ -53,6 +56,7 @@ E|------------|------------|
 | `y` or `Ctrl`+`C` (`⌘`+`C` on macOS) | Copy the selected measures, or the current one |
 | `p` or `Ctrl`+`V` (`⌘`+`V` on macOS) | Paste the copied measures after the current one |
 | `d` or `Delete` | Delete the selected measures, or the current one |
+| `:` | Repeat the selected measures, or the current one, with `\|:` and `:\|` bars. Press again to remove it. A new repeat replaces any it overlaps |
 | `C` | Pick a chord shape and enter chord mode |
 | `N` | Insert a staff below |
 | `I` | Switch the staff between guitar and bass |
@@ -74,6 +78,8 @@ A preview of the chord follows the cursor until you write it.
 | `Tab`, `Shift+Tab` | Next or previous shape |
 | `+` or `=`, `-` | Move the root fret up or down |
 | `Enter` | Write the chord |
+| `Space` | Clear every string on the beat |
+| `Backspace` | Clear every string on the previous beat and move onto it |
 | `C` | Pick a different shape |
 | Movement keys | As in tab mode |
 | `Esc` or `q` | Return to tab mode |

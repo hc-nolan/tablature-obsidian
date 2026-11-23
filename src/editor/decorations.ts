@@ -9,7 +9,6 @@ import { BEAT_WIDTH, type Measure, posToCol, type Pos, type Staff } from '../cor
 import { currentStaff, keysExpanded, modeField, selectedMeasures } from './mode';
 
 const FILLER = '-';
-const CELL_CONTENT_WIDTH = 2;
 
 /** A plain element, so this file needs no host framework (Obsidian's `createEl`, Vue, …). */
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -69,7 +68,7 @@ const MOVE: LegendRow = { group: 'Move', keys: [['←→ hl', 'beat'], ['↑↓ 
 const TAB_ESSENTIALS: KeyHint[] = [['Space', 'clear'], ['C', 'chord'], ['Esc', 'exit'], MORE];
 const tabAll = (isMac: boolean): LegendRow[] => [
 	MOVE,
-	{ group: 'Edit', keys: [['0–9', 'fret'], ['Space', 'clear'], ['⌫', 'clear left']] },
+	{ group: 'Edit', keys: [['0–9', 'fret'], ['/ \\', 'slide'], ['b', 'bend'], ['Space', 'clear'], ['⌫', 'clear left']] },
 	{
 		group: 'Measures',
 		keys: [
@@ -77,6 +76,7 @@ const tabAll = (isMac: boolean): LegendRow[] => [
 			[isMac ? 'y ⌘C' : 'y Ctrl+C', 'copy'],
 			[isMac ? 'p ⌘V' : 'p Ctrl+V', 'paste after'],
 			['d Del', 'delete'],
+			[':', 'repeat'],
 		],
 	},
 	{ group: 'Staff', keys: [['T', 'tuning'], ['B', 'beats'], ['I', 'guitar/bass'], ['N', 'new staff']] },
@@ -88,6 +88,8 @@ const CHORD_ALL: LegendRow[] = [
 	MOVE,
 	{ group: 'Shape', keys: [['Tab', 'next'], ['⇧Tab', 'previous'], ['C', 'pick']] },
 	{ group: 'Root', keys: [['+', 'up'], ['-', 'down']] },
+
+	{ group: 'Edit', keys: [['Space', 'clear beat'], ['⌫', 'clear beat left']] },
 	{ group: 'Mode', keys: [['Enter', 'insert'], ['Esc', 'back'], FEWER] },
 ];
 
@@ -193,11 +195,11 @@ export function buildDecorations(state: EditorState, config: Config, isMac = fal
 		const col = posToCol(staff, pos);
 		for (let row = 0; row < count; row++) {
 			const from = rowFrom(row) + col;
-			const text = (voicing[count - 1 - row] as string).padEnd(CELL_CONTENT_WIDTH, FILLER);
+			const text = (voicing[count - 1 - row] as string).padEnd(BEAT_WIDTH, FILLER);
 			ranges.push(
 				Decoration.replace({ widget: new TextWidget(text, 'tablature-preview', 'span') }).range(
 					from,
-					from + CELL_CONTENT_WIDTH,
+					from + BEAT_WIDTH,
 				),
 			);
 		}

@@ -20,7 +20,10 @@ import {
 	restring,
 	setStaffBeats,
 	type Staff,
+	type Technique,
 	staffLabelsLowToHigh,
+	toggleTechnique,
+	toggleRepeat,
 	writeFret,
 } from '../core/staff';
 import {
@@ -59,9 +62,11 @@ export type Action =
 				| 'copy'
 				| 'paste'
 				| 'deleteMeasures'
+				| 'toggleRepeat'
 				| 'exit';
 	  }
 	| { type: 'digit'; digit: string }
+	| { type: 'technique'; technique: Technique }
 	| { type: 'nextShape' | 'prevShape' | 'rootUp' | 'rootDown' | 'writeChord' };
 
 export type PickerRequest =
@@ -131,6 +136,12 @@ function posRight(staff: Staff, pos: Pos): Pos {
 		return { measure: pos.measure, beat: pos.beat + 1 };
 	}
 	return pos.measure + 1 < staff.measures.length ? { measure: pos.measure + 1, beat: 0 } : pos;
+}
+
+/** Tab mode clears one cell. Chord mode clears the whole beat, since a chord fills every string. */
+function clearEdits(mode: ActiveMode, staff: Staff, stringRow: number, pos: Pos): LineEdit[] {
+	if (mode.kind !== 'chord') return [clearCell(staff, stringRow, pos)];
+	return staff.rows.map((_, row) => clearCell(staff, row, pos));
 }
 
 function clampRoot(chord: ChordState): ChordState {
@@ -312,13 +323,18 @@ export function applyAction(
 			const { edit, pending } = writeFret(staff, row, pos, action.digit, mode.pending);
 			return editSpec(state, mode, staff, [edit], row, pos, pending);
 		}
+		case 'technique': {
+			const result = toggleTechnique(staff, row, pos, action.technique);
+			if (!result.ok) return { notice: result.problem };
+			return editSpec(state, mode, staff, [result.edit], row, pos, false);
+		}
 		case 'clear':
-			return editSpec(state, mode, staff, [clearCell(staff, row, pos)], row, pos, false);
+			return editSpec(state, mode, staff, clearEdits(mode, staff, row, pos), row, pos, false);
 		case 'clearLeft': {
 			// The cursor is drawn at the start of its cell, so like a text editor, Backspace clears the cell before it.
 			const left = posLeft(staff, pos);
 			if (left.measure === pos.measure && left.beat === pos.beat) return moveTo(state, mode, staff, row, pos);
-			return editSpec(state, mode, staff, [clearCell(staff, row, left)], row, left, false);
+			return editSpec(state, mode, staff, clearEdits(mode, staff, row, left), row, left, false);
 		}
 		case 'pickTuning': {
 			const tunings = allTunings(config);
@@ -380,6 +396,10 @@ export function applyAction(
 			const result = pasteMeasures(staff, pos.measure, copied);
 			if (!result.ok) return { notice: result.problem };
 			return editSpec(state, mode, staff, result.edits, row, { measure: pos.measure + 1, beat: 0 }, false);
+		}
+		case 'toggleRepeat': {
+			const [from, to] = selectedMeasures(mode, staff, pos);
+			return editSpec(state, mode, staff, toggleRepeat(staff, from, to), row, pos, false);
 		}
 		case 'deleteMeasures': {
 			const [from, to] = selectedMeasures(mode, staff, pos);

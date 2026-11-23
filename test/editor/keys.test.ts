@@ -55,6 +55,7 @@ describe('resolveKey in tab mode', () => {
 		['p', 'paste'],
 		['d', 'deleteMeasures'],
 		['Delete', 'deleteMeasures'],
+		[':', 'toggleRepeat'],
 	])('%j → %s', (key, type) => {
 		expect(resolveKey('tab', input(key))).toEqual(action(type));
 	});
@@ -78,6 +79,11 @@ describe('resolveKey in tab mode', () => {
 
 	it.each(['0', '1', '5', '9'])('%s writes a digit', (digit) => {
 		expect(resolveKey('tab', input(digit))).toEqual({ kind: 'action', action: { type: 'digit', digit } });
+	});
+
+	it.each(['/', '\\', 'b'])('%s marks a slide or bend', (technique) => {
+		expect(resolveKey('tab', input(technique))).toEqual({ kind: 'action', action: { type: 'technique', technique } });
+		expect(resolveKey('chord', input(technique))).toEqual({ kind: 'swallow' });
 	});
 
 	it('swallows keys it does not use', () => {
@@ -132,6 +138,8 @@ describe('resolveKey in chord mode', () => {
 		['-', 'rootDown'],
 		['Enter', 'writeChord'],
 		['C', 'pickShape'],
+		[' ', 'clear'],
+		['Backspace', 'clearLeft'],
 	])('%j → %s', (key, type) => {
 		expect(resolveKey('chord', input(key))).toEqual(action(type));
 	});
@@ -143,7 +151,7 @@ describe('resolveKey in chord mode', () => {
 		expect(resolveKey('tab', input('?', { shift: true }))).toEqual(action('toggleKeys'));
 	});
 
-	it.each(['5', 'T', 'B', 'N', ' ', 'Backspace', 'z'])('swallows %j', (key) => {
+	it.each(['5', 'T', 'B', 'N', 'z'])('swallows %j', (key) => {
 		expect(resolveKey('chord', input(key))).toEqual({ kind: 'swallow' });
 	});
 });
